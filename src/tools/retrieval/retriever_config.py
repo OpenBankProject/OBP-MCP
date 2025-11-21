@@ -80,7 +80,7 @@ class EmbeddingsFactory:
         Raises:
             ConfigurationError: If model_name is invalid
         """
-        from agent.utils.model_factory import get_embedding_model
+        from src.utils.model_factory import get_embedding_model
         
         if not isinstance(model_name, str) or not model_name.strip():
             raise ConfigurationError("model_name must be a non-empty string")
@@ -369,7 +369,7 @@ class ChromaVectorStoreProvider(VectorStoreProvider):
                     
                 # Validate based on collection type
                 if collection_name == "obp_glossary":
-                    from src.database.document_schemas import GlossaryDocumentSchema
+                    from database.document_schemas import GlossaryDocumentSchema
                     for i, doc in enumerate(sample["documents"]):
                         metadata = {k: sample["metadatas"][i][k] for k in sample["metadatas"][i]}
                         try:
@@ -379,7 +379,7 @@ class ChromaVectorStoreProvider(VectorStoreProvider):
                             return False
                 
                 elif collection_name == "obp_endpoints":
-                    from src.database.document_schemas import EndpointDocumentSchema
+                    from database.document_schemas import EndpointDocumentSchema
                     for i, doc in enumerate(sample["documents"]):
                         metadata = {k: sample["metadatas"][i][k] for k in sample["metadatas"][i]}
                         try:
@@ -521,7 +521,9 @@ def _get_vector_store_provider() -> VectorStoreProvider:
         ConfigurationError: If vector store type is unsupported
     """
     if _default_vector_store_type == "chroma":
-        return ChromaVectorStoreProvider()
+        from database.config import get_chromadb_directory
+        chroma_dir = get_chromadb_directory()
+        return ChromaVectorStoreProvider(persist_directory=chroma_dir)
     # TODO: Add other vector store types here following the same pattern
     # elif _default_vector_store_type == "pinecone":
     #     return PineconeVectorStoreProvider()

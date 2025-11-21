@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from agent.utils.model_factory import get_llm
+from src.utils.model_factory import get_llm
 
 ### Document Grader chain
 # For a given document, assesses whether it is relevant to the user's query

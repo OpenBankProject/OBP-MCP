@@ -11,6 +11,7 @@ import json
 import requests
 from typing import List, Dict, Any
 from dotenv import load_dotenv
+from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -23,6 +24,7 @@ from src.tools.retrieval.retriever_config import (
     ConfigurationError
 )
 from database.document_schemas import GlossaryDocumentSchema, EndpointDocumentSchema
+from database.config import get_chromadb_directory
 
 # Load environment variables
 load_dotenv()
@@ -31,11 +33,12 @@ def get_obp_config(endpoint_type="static"):
     """Get OBP configuration from environment variables."""
     base_url = os.getenv("OBP_BASE_URL")
     api_version = os.getenv("OBP_API_VERSION")
-    chroma_dir = os.getenv("CHROMADB_DIRECTORY")
+    
+    chroma_dir = get_chromadb_directory()
 
     if not all([base_url, api_version, chroma_dir]):
-        raise ValueError("Missing required environment variables: OBP_BASE_URL, OBP_API_VERSION, CHROMADB_DIRECTORY")
-
+        raise ValueError("Missing required environment variables: OBP_BASE_URL, OBP_API_VERSION")
+    
     return {
         "base_url": base_url,
         "api_version": api_version,

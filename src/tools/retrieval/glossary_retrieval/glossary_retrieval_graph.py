@@ -1,11 +1,11 @@
 from langgraph.graph import StateGraph, START, END
-from agent.components.retrieval.glossary_retrieval.components.states import SelfRAGGraphState, InputState, OutputState
-from agent.components.retrieval.glossary_retrieval.components.nodes import retrieve_glossary, grade_documents_glossary, return_documents
+from .components.states import SelfRAGGraphState, InputState, OutputState
+from .components.nodes import retrieve_glossary, grade_documents_glossary, return_documents
 
 # Glossary retrieval graph definition
 # NOTE: Some components are shared with the endpoint retrieval graph
 
-glossary_retrieval_workflow = StateGraph(SelfRAGGraphState, input=InputState, output=OutputState)
+glossary_retrieval_workflow = StateGraph(SelfRAGGraphState, input_schema=InputState, output_schema=OutputState)
 
 glossary_retrieval_workflow.add_node("retrieve_items", retrieve_glossary)
 glossary_retrieval_workflow.add_node("grade_documents", grade_documents_glossary)

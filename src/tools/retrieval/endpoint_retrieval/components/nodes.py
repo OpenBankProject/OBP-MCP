@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 
 from langchain_core.documents import Document
 from typing import List
@@ -9,6 +10,8 @@ from src.tools.retrieval.endpoint_retrieval.components.chains import retrieval_g
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger("agent.components.retrieval.endpoint_retrieval")
 
 # Configuration from environment variables
 RETRIEVER_BATCH_SIZE = int(os.getenv("ENDPOINT_RETRIEVER_BATCH_SIZE", "5"))
@@ -30,7 +33,7 @@ async def retrieve_endpoints(state):
     Returns:
         state (dict): New key added to state, documents, that contains retrieved documents
     """
-    print("---RETRIEVE ENDPOINTS---")
+    logger.info("---RETRIEVE ENDPOINTS---")
     rewritten_question = state.get("rewritten_question", "")
     total_retries = state.get("total_retries", 0)
 
@@ -46,7 +49,7 @@ async def retrieve_endpoints(state):
 
 async def return_documents(state) -> OutputState:
     """Return the relevant documents"""
-    print("---RETRUN RELEVANT DOCUMENTS---")
+    logger.info("---RETRUN RELEVANT DOCUMENTS---")
     relevant_documents: List[Document] = state["relevant_documents"]
 
     output_docs = []
@@ -76,7 +79,7 @@ async def grade_documents(state):
         state (dict): Updates documents key with only filtered relevant documents
     """
 
-    print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
+    logger.info("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
     question = state["question"]
     documents = state["documents"]
 
@@ -90,12 +93,12 @@ async def grade_documents(state):
         )
         grade = score.binary_score
         if grade == "yes":
-            print(f"{d.metadata["method"]} - {d.metadata["path"]}", " [RELEVANT]")
-            #print("---GRADE: DOCUMENT RELEVANT---")
+            logger.info(f"{d.metadata["method"]} - {d.metadata["path"]}" + " [RELEVANT]")
+            #logger.info("---GRADE: DOCUMENT RELEVANT---")
             filtered_docs.append(d)
         else:
-            print(f"{d.metadata["method"]} - {d.metadata["path"]}", " [NOT RELEVANT]")
-            #print("---GRADE: DOCUMENT NOT RELEVANT---")
+            logger.info(f"{d.metadata["method"]} - {d.metadata["path"]}" + " [NOT RELEVANT]")
+            #logger.info("---GRADE: DOCUMENT NOT RELEVANT---")
             continue
 
     # If there are less documents than the threshold then retry query after rewriting question
@@ -121,7 +124,7 @@ async def transform_query(state):
         state (dict): Updates question key with a re-phrased question
     """
 
-    print("---TRANSFORM QUERY---")
+    logger.info("---TRANSFORM QUERY---")
     question = state["question"]
     documents = state["documents"]
     total_retries = state.get("total_retries", 0)

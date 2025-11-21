@@ -1,4 +1,6 @@
 import logging
+from langchain_core.documents import Document
+from typing import List
 from src.tools.retrieval.retriever_config import get_retriever
 from src.tools.retrieval.endpoint_retrieval.components.chains import retrieval_grader
 from src.tools.retrieval.glossary_retrieval.components.states import SelfRAGGraphState, OutputState, InputState
@@ -17,7 +19,7 @@ async def retrieve_glossary(state):
     Returns:
         state (dict): New key added to state, documents, that contains retrieved documents
     """
-    logging.info("---RETRIEVE ITEMS---")
+    logger.info("---RETRIEVE ITEMS---")
     rewritten_question = state.get("rewritten_question", "")
     total_retries = state.get("total_retries", 0)
     
@@ -41,7 +43,7 @@ async def grade_documents_glossary(state):
         state (dict): Updates documents key with only filtered relevant documents
     """
 
-    logging.info("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
+    logger.info("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
     question = state["question"]
     documents = state["documents"]
     
@@ -50,15 +52,23 @@ async def grade_documents_glossary(state):
     # glossary_search = False
     retry_query = False
     for d in documents:
+        # Handle both Document objects and dicts
+        if isinstance(d, dict):
+            page_content = d.get("page_content", "")
+            title = d.get("metadata", {}).get("title", "Unknown")
+        else:
+            page_content = d.page_content
+            title = d.metadata.get("title", "Unknown")
+            
         score = await retrieval_grader.ainvoke(
-            {"question": question, "document": d.page_content}
+            {"question": question, "document": page_content}
         )
         grade = score.binary_score
         if grade == "yes":
-            logging.info(f"{d.metadata["title"]}" + " [RELEVANT]")
+            logger.info(f"{title} [RELEVANT]")
             filtered_docs.append(d)
         else:
-            logging.info(f"{d.metadata["title"]}" + " [NOT RELEVANT]")
+            logger.info(f"{title} [NOT RELEVANT]")
             continue
         
     # If there are three or less relevant endpoints then retry query after rewriting question
@@ -72,6 +82,21 @@ async def grade_documents_glossary(state):
               
 async def return_documents(state) -> OutputState:
     """Return the relevant documents"""
-    logging.info("---RETRUN RELEVANT DOCUMENTS---")
+    logger.info("---RETRUN RELEVANT DOCUMENTS---")
     relevant_documents = state["relevant_documents"]
-    return {"relevant_documents": relevant_documents}
+    
+    output_docs = []
+    for doc in relevant_documents:
+        # Handle both Document objects and dicts
+        if isinstance(doc, dict):
+            page_content = doc.get("page_content", "")
+        else:
+            page_content = doc.page_content
+            
+        output_docs.append(
+            {
+                "page_content": page_content
+            }
+        )
+    
+    return {"output_documents": output_docs}

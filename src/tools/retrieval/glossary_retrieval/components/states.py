@@ -38,4 +38,4 @@ class OutputState(TypedDict):
     """
     Graph returns relevant endpoints
     """
-    relevant_documents: Annotated[List[str], add_docs]
+    output_documents: Annotated[List[str], add_docs]

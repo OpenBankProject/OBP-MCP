@@ -1,7 +1,7 @@
 from langgraph.graph import END, StateGraph, START
-from .components.states import SelfRAGGraphState, OutputState, InputState
-from .components.nodes import grade_documents, retrieve_endpoints, transform_query, return_documents
-from .components.edges import decide_to_generate
+from src.tools.retrieval.endpoint_retrieval.components.states import SelfRAGGraphState, OutputState, InputState
+from src.tools.retrieval.endpoint_retrieval.components.nodes import grade_documents, retrieve_endpoints, transform_query, return_documents
+from src.tools.retrieval.endpoint_retrieval.components.edges import decide_to_generate
 
 workflow = StateGraph(SelfRAGGraphState, input_schema=InputState, output_schema=OutputState)
 

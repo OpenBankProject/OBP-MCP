@@ -1,7 +1,7 @@
 import logging
 from src.tools.retrieval.retriever_config import get_retriever
 from src.tools.retrieval.endpoint_retrieval.components.chains import retrieval_grader
-from .states import SelfRAGGraphState, OutputState, InputState
+from src.tools.retrieval.glossary_retrieval.components.states import SelfRAGGraphState, OutputState, InputState
 
 logger = logging.getLogger("agent.components.retrieval.glossary_retrieval")
 

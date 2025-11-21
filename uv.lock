@@ -569,6 +569,17 @@ wheels = [
 ]
 
 [[package]]
+name = "html-to-markdown"
+version = "2.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/bc/92e76049a383b615a74298644d6f08227a3be92725f67d05c6636e2d856f/html_to_markdown-2.9.0.tar.gz", hash = "sha256:b2379294235e8a17b16e3ae9c43fa9aed38dca4721ebcaec81c96ebfb333e4b2", size = 124554, upload-time = "2025-11-20T12:24:07.313Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/6b/0180bcfc6b0357d6cc9399c552c25ed4ed051d026bb407cc4f102cacdcc9/html_to_markdown-2.9.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:7308d659018df6feac91eb0a3d3da5f1f8b15289e8fa42b6fa454cac7db971ad", size = 3763606, upload-time = "2025-11-20T12:24:02.119Z" },
+    { url = "https://files.pythonhosted.org/packages/94/66/5185591ae816f791216203935081dea645243ba9895670591d9f8a0d2c7f/html_to_markdown-2.9.0-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:65362f809cb05b33872c59961020dbc852a34d16f48254825c86cf94f61a6bf3", size = 4195803, upload-time = "2025-11-20T12:24:04.163Z" },
+    { url = "https://files.pythonhosted.org/packages/76/58/56ad92aa22b80cf800be4529b62a190e5e0874e1c74a46db75a23e982113/html_to_markdown-2.9.0-cp310-abi3-win_amd64.whl", hash = "sha256:4c8942f1f170d4b5570bf02ca4c60a9fca5ad382376b7289929b89f94f25a432", size = 4116455, upload-time = "2025-11-20T12:24:05.889Z" },
+]
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -1214,6 +1225,7 @@ name = "obp-mcp"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "html-to-markdown" },
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
@@ -1228,6 +1240,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "html-to-markdown", specifier = ">=2.9.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.0.7" },
     { name = "langchain-anthropic", specifier = ">=1.1.0" },

@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
-from .components.states import SelfRAGGraphState, InputState, OutputState
-from .components.nodes import retrieve_glossary, grade_documents_glossary, return_documents
+from src.tools.retrieval.glossary_retrieval.components.states import SelfRAGGraphState, InputState, OutputState
+from src.tools.retrieval.glossary_retrieval.components.nodes import retrieve_glossary, grade_documents_glossary, return_documents
 
 # Glossary retrieval graph definition
 # NOTE: Some components are shared with the endpoint retrieval graph

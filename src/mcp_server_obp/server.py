@@ -120,13 +120,13 @@ def call_obp_api(
     """
     Execute an OBP API request to a specific endpoint.
     
-    This validates parameters against the endpoint schema and makes the actual API call.
+    Uses the lightweight endpoint index to construct and execute the API call.
     Requires OBP_BASE_URL and OBP_API_VERSION environment variables to be set.
     You may also need authentication headers depending on the endpoint.
     
     Args:
-        endpoint_id: The unique identifier of the endpoint
-        path_params: Dictionary of path parameters (e.g., {"ACCOUNT_ID": "123"})
+        endpoint_id: The unique identifier of the endpoint (operation_id from list_endpoints_by_tag)
+        path_params: Dictionary of path parameters (e.g., {"BANK_ID": "gh.29.uk"})
         query_params: Dictionary of query parameters (e.g., {"limit": 10})
         body: Request body as dictionary (for POST/PUT requests)
         headers: Additional HTTP headers (e.g., {"Authorization": "DirectLogin token=..."})
@@ -135,24 +135,17 @@ def call_obp_api(
         JSON string with API response or error details
     
     Example:
-        call_obp_api("GET-obp-vVERSION-banks", query_params={"limit": 5})
+        call_obp_api("OBPv4.0.0-getBanks") -> Get list of banks
     """
     try:
         index = get_endpoint_index()
         
-        # Get endpoint info
+        # Get endpoint info from lightweight index
         endpoint = index.get_endpoint_by_id(endpoint_id)
         if not endpoint:
             return json.dumps({
                 "error": f"Endpoint '{endpoint_id}' not found",
                 "suggestion": "Use list_endpoints_by_tag() to find available endpoints"
-            }, indent=2)
-        
-        # Get full schema for validation
-        schema = index.get_endpoint_schema(endpoint_id)
-        if not schema:
-            return json.dumps({
-                "error": f"Could not load schema for endpoint '{endpoint_id}'"
             }, indent=2)
         
         # Build the request URL
@@ -253,5 +246,13 @@ async def retrieve_glossary_terms(query: str) -> str | None:
     formatted_output = glossary_formatter(glossary_output["output_documents"])
     
     return formatted_output
-    
-    
+
+
+# ============================================================================
+# HTTP SERVER CONFIGURATION
+# ============================================================================
+
+if __name__ == "__main__":
+    # Run the FastMCP server with stdio transport (default)
+    # This is used for local MCP clients like Claude Desktop
+    mcp.run()

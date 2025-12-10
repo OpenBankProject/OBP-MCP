@@ -55,6 +55,53 @@ python scripts/generate_endpoint_index.py
 
 This creates `database/endpoint_index.json` with endpoint summaries.
 
+### Running the Server
+
+#### Option 1: HTTP Server (Recommended)
+
+Run the server as an HTTP service:
+
+```bash
+# Install dependencies
+uv sync
+
+# Quick start with default settings (recommended)
+./run_server.sh
+```
+
+The server will start on `http://0.0.0.0:8000` by default. You can customize the configuration:
+
+```bash
+# Custom host and port
+export MCP_SERVER_HOST=127.0.0.1
+export MCP_SERVER_PORT=9000
+./run_server.sh
+
+# Or run directly with Python
+python src/mcp_server_obp/server.py
+```
+
+#### Option 2: VS Code Integration
+
+First, start the HTTP server:
+```bash
+./run_server.sh
+```
+
+Then configure the server in your VS Code MCP settings (`~/.config/Code/User/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "obp-mcp": {
+      "url": "http://localhost:8000"
+    }
+  }
+}
+```
+
+For reference, see the example configuration in `.vscode/mcp.json.example`.
+
 ## Usage
 
 ### Tool 1: List Endpoints by Tag

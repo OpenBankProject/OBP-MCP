@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "obp-mcp-http": {
+      "url": "http://localhost:8000"
+    }
+  }
+}

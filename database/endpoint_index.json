@@ -1,0 +1,84 @@
+{
+  "endpoints": {
+    "vVERSION-getBanks": {
+      "id": "vVERSION-getBanks",
+      "method": "GET",
+      "path": "/obp/vVERSION/banks",
+      "operation_id": "vVERSION-getBanks",
+      "summary": "Get Banks",
+      "tags": ["Bank"]
+    },
+    "vVERSION-privateAccountsAtOneBank": {
+      "id": "vVERSION-privateAccountsAtOneBank",
+      "method": "GET",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/accounts",
+      "operation_id": "vVERSION-privateAccountsAtOneBank",
+      "summary": "Get Accounts at Bank (Private)",
+      "tags": ["Account", "Bank"]
+    },
+    "vVERSION-accountById": {
+      "id": "vVERSION-accountById",
+      "method": "GET",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/accounts/{ACCOUNT_ID}/account",
+      "operation_id": "vVERSION-accountById",
+      "summary": "Get Account by Id (Full)",
+      "tags": ["Account"]
+    },
+    "vVERSION-getTransactionsForBankAccount": {
+      "id": "vVERSION-getTransactionsForBankAccount",
+      "method": "GET",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/accounts/{ACCOUNT_ID}/{VIEW_ID}/transactions",
+      "operation_id": "vVERSION-getTransactionsForBankAccount",
+      "summary": "Get Transactions for Account (Full)",
+      "tags": ["Transaction", "Account"]
+    },
+    "vVERSION-createAccount": {
+      "id": "vVERSION-createAccount",
+      "method": "POST",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/accounts",
+      "operation_id": "vVERSION-createAccount",
+      "summary": "Create Account",
+      "tags": ["Account", "Bank"]
+    },
+    "vVERSION-getCurrentUser": {
+      "id": "vVERSION-getCurrentUser",
+      "method": "GET",
+      "path": "/obp/vVERSION/users/current",
+      "operation_id": "vVERSION-getCurrentUser",
+      "summary": "Get Current User",
+      "tags": ["User"]
+    },
+    "vVERSION-getCustomersForBank": {
+      "id": "vVERSION-getCustomersForBank",
+      "method": "GET",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/customers",
+      "operation_id": "vVERSION-getCustomersForBank",
+      "summary": "Get Customers for Bank",
+      "tags": ["Customer", "Bank"]
+    },
+    "vVERSION-createCustomer": {
+      "id": "vVERSION-createCustomer",
+      "method": "POST",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/customers",
+      "operation_id": "vVERSION-createCustomer",
+      "summary": "Create Customer",
+      "tags": ["Customer", "Bank"]
+    },
+    "vVERSION-getProducts": {
+      "id": "vVERSION-getProducts",
+      "method": "GET",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/products",
+      "operation_id": "vVERSION-getProducts",
+      "summary": "Get Products",
+      "tags": ["Product", "Bank"]
+    },
+    "vVERSION-getAtms": {
+      "id": "vVERSION-getAtms",
+      "method": "GET",
+      "path": "/obp/vVERSION/banks/{BANK_ID}/atms",
+      "operation_id": "vVERSION-getAtms",
+      "summary": "Get ATMs",
+      "tags": ["ATM", "Bank"]
+    }
+  }
+}

@@ -218,7 +218,7 @@ Contributions are welcome! Please ensure:
 
 ## License
 
-[Add license information]
+AGPLv3
 
 ## Support
 

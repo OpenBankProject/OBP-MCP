@@ -2,12 +2,6 @@
 
 # OBP-MCP HTTP Server Startup Script
 
-# Set default values if not already set
-export MCP_SERVER_HOST=${MCP_SERVER_HOST:-0.0.0.0}
-export MCP_SERVER_PORT=${MCP_SERVER_PORT:-8000}
-export OBP_BASE_URL=${OBP_BASE_URL:-https://apisandbox.openbankproject.com}
-export OBP_API_VERSION=${OBP_API_VERSION:-v5.1.0}
-
 # Parse command line arguments
 WATCH_MODE=false
 while [[ $# -gt 0 ]]; do

@@ -20,7 +20,7 @@ if str(_src_dir) not in sys.path:
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from mcp.server.fastmcp import Context, FastMCP
+from fastmcp import FastMCP
 from mcp.server.session import ServerSession
 from mcp.server.auth.settings import AuthSettings
 from pydantic import AnyUrl
@@ -45,8 +45,6 @@ mcp = FastMCP(
         "Open Bank Project",
         stateless_http=True,
         json_response=True,
-        log_level="DEBUG",
-        auth=auth_settings
     )
 
 
@@ -325,7 +323,7 @@ def get_glossary_term(term_id: str) -> str:
 # ============================================================================
 
 @mcp.resource("obp://glossary")
-def get_glossary_list() -> str:
+def glossary_list() -> str:
     """
     Get the complete list of OBP glossary terms.
     
@@ -356,7 +354,7 @@ def get_glossary_list() -> str:
 
 
 @mcp.resource("obp://glossary/{term_id}")
-def get_glossary_term(term_id: str) -> str:
+def glossary_term(term_id: str) -> str:
     """
     Get a specific glossary term by ID.
     
@@ -416,4 +414,4 @@ def get_glossary_term(term_id: str) -> str:
 if __name__ == "__main__":
     # Run the FastMCP server with http transport (default)
     # This is used for local MCP clients like Claude Desktop
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", log_level="DEBUG",)

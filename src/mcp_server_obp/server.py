@@ -28,14 +28,28 @@ from pydantic import AnyUrl
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
 
-mcp = FastMCP(
-    "Open Bank Project",
-    stateless_http=True,
-    json_response=True,
-    log_level="DEBUG",
-)
-
 logger = logging.getLogger(__name__)
+
+if not os.getenv("ENABLE_OAUTH"):
+    auth_settings = None
+    logger.info("OAuth is disabled; running in unauthenticated mode.")
+else:
+    auth_settings = AuthSettings(
+        issuer_url=AnyUrl(os.getenv("OAUTH_ISSUER_URL")),
+        resource_server_url=AnyUrl(os.getenv("RESOURCE_SERVER_URL")),
+        required_scopes=["user"]
+    )
+    logger.info("OAuth is enabled; authentication required.")
+
+mcp = FastMCP(
+        "Open Bank Project",
+        stateless_http=True,
+        json_response=True,
+        log_level="DEBUG",
+        auth=auth_settings
+    )
+
+
 
 # ============================================================================
 # NEW HYBRID TAG-BASED ENDPOINT TOOLS (RECOMMENDED)

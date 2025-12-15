@@ -94,8 +94,9 @@ Then configure the server in your VS Code MCP settings (`~/.config/Code/User/mcp
 {
   "mcpServers": {
     "obp-mcp": {
-      "url": "http://localhost:8000"
-    }
+			"url": "http://0.0.0.0:8000/mcp",
+			"type": "http"
+		}
   }
 }
 ```

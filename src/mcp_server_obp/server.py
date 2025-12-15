@@ -26,7 +26,7 @@ from src.tools.retrieval import endpoint_retrieval_graph, glossary_retrieval_gra
 from utils.formatters import endpoint_formatter, glossary_formatter
 from src.tools.endpoint_index import get_endpoint_index
 
-mcp = FastMCP("Open Bank Project", log_level="DEBUG")
+mcp = FastMCP("Open Bank Project", stateless_http=True, json_response=True, log_level="DEBUG")
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +253,6 @@ async def retrieve_glossary_terms(query: str) -> str | None:
 # ============================================================================
 
 if __name__ == "__main__":
-    # Run the FastMCP server with stdio transport (default)
+    # Run the FastMCP server with http transport (default)
     # This is used for local MCP clients like Claude Desktop
-    mcp.run()
+    mcp.run(transport="streamable-http")

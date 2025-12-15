@@ -22,8 +22,9 @@ if str(_project_root) not in sys.path:
 
 from fastmcp import FastMCP
 from mcp.server.session import ServerSession
-from mcp.server.auth.settings import AuthSettings
-from pydantic import AnyUrl
+from fastmcp.server.auth import RemoteAuthProvider
+from fastmcp.server.auth.providers.jwt import JWTVerifier
+from pydantic import AnyHttpUrl
 
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
@@ -31,20 +32,36 @@ from src.tools.glossary_index import get_glossary_index
 logger = logging.getLogger(__name__)
 
 if not os.getenv("ENABLE_OAUTH"):
-    auth_settings = None
+    auth = None
     logger.info("OAuth is disabled; running in unauthenticated mode.")
 else:
-    auth_settings = AuthSettings(
-        issuer_url=AnyUrl(os.getenv("OAUTH_ISSUER_URL")),
-        resource_server_url=AnyUrl(os.getenv("RESOURCE_SERVER_URL")),
-        required_scopes=["user"]
+    logger.info("OAuth is enabled; setting up authentication.")
+    # Configure JWT verification against your identity provider
+    oauth_provider_url = os.getenv("OAUTH_ISSUER_URL")
+    resource_server_url = os.getenv("RESOURCE_SERVER_URL")
+    if not oauth_provider_url or not resource_server_url:
+        raise ValueError("OAUTH_ISSUER_URL and RESOURCE_SERVER_URL must be set when ENABLE_OAUTH is true.")
+    
+    verifier = JWTVerifier(
+        jwks_uri=f"{oauth_provider_url}/.well-known/jwks.json",
+        issuer=oauth_provider_url,
+        audience="mcp-production-api"
     )
-    logger.info("OAuth is enabled; authentication required.")
+    
+    auth = RemoteAuthProvider(
+            token_verifier=verifier,
+            authorization_servers=[AnyHttpUrl(oauth_provider_url)],
+            base_url=resource_server_url,  # Your server base URL
+            # # Optional: customize allowed client redirect URIs (defaults to localhost only)
+            # allowed_client_redirect_uris=["http://localhost:*", "http://127.0.0.1:*"]
+        )
+    
 
 mcp = FastMCP(
         "Open Bank Project",
         stateless_http=True,
         json_response=True,
+        auth=auth,
     )
 
 
@@ -414,4 +431,4 @@ def glossary_term(term_id: str) -> str:
 if __name__ == "__main__":
     # Run the FastMCP server with http transport (default)
     # This is used for local MCP clients like Claude Desktop
-    mcp.run(transport="streamable-http", log_level="DEBUG",)
+    mcp.run(transport="streamable-http", log_level="DEBUG")

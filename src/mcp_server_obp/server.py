@@ -22,11 +22,20 @@ if str(_project_root) not in sys.path:
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
+from mcp.server.auth.settings import AuthSettings
+from pydantic import AnyUrl
+
 from src.tools.retrieval import endpoint_retrieval_graph, glossary_retrieval_graph, GlossarySearchInput, GlossarySearchOutput, EndpointSearchInput, EndpointSearchOutput
 from utils.formatters import endpoint_formatter, glossary_formatter
 from src.tools.endpoint_index import get_endpoint_index
+from src.tools.glossary_index import get_glossary_index
 
-mcp = FastMCP("Open Bank Project", stateless_http=True, json_response=True, log_level="DEBUG")
+mcp = FastMCP(
+    "Open Bank Project",
+    stateless_http=True,
+    json_response=True,
+    log_level="DEBUG",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +255,183 @@ async def retrieve_glossary_terms(query: str) -> str | None:
     formatted_output = glossary_formatter(glossary_output["output_documents"])
     
     return formatted_output
+
+
+# ============================================================================
+# GLOSSARY TOOLS (Lightweight Index-Based)
+# ============================================================================
+
+@mcp.tool()
+def list_glossary_terms(search_query: str = "") -> str:
+    """
+    List OBP glossary terms. Optionally filter by search query.
+    
+    Returns a lightweight list of glossary terms with their IDs and titles.
+    Use get_glossary_term() to fetch the full definition of a specific term.
+    
+    Args:
+        search_query: Optional search string to filter terms by title or description (case-insensitive)
+    
+    Returns:
+        JSON string with glossary terms including: id, title
+    
+    Example:
+        list_glossary_terms() -> Returns all glossary terms
+        list_glossary_terms("oauth") -> Returns OAuth-related terms
+    """
+    try:
+        index = get_glossary_index()
+        
+        if search_query:
+            terms = index.search_terms(search_query)
+            message = f"Found {len(terms)} terms matching '{search_query}'"
+        else:
+            terms = index.list_all_terms()
+            message = f"Total glossary terms: {len(terms)}"
+        
+        # Return lightweight list
+        term_list = [
+            {"id": term["id"], "title": term["title"]}
+            for term in terms
+        ]
+        
+        return json.dumps({
+            "message": message,
+            "count": len(term_list),
+            "terms": term_list[:100]  # Limit to first 100 to avoid token overflow
+        }, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Error listing glossary terms: {e}")
+        return json.dumps({"error": str(e)}, indent=2)
+
+
+@mcp.tool()
+def get_glossary_term(term_id: str) -> str:
+    """
+    Get the full definition of a specific glossary term by ID.
+    
+    Returns the complete glossary term including title and description (markdown and HTML formats).
+    
+    Args:
+        term_id: The unique identifier of the glossary term (e.g., "account-account-id", "oauth", "api")
+    
+    Returns:
+        JSON string with full term details including title and description
+    
+    Example:
+        get_glossary_term("oauth") -> Full OAuth definition
+        get_glossary_term("account-account-id") -> Full Account ID definition
+    """
+    try:
+        index = get_glossary_index()
+        term = index.get_term(term_id)
+        
+        if not term:
+            # Try to find similar terms
+            all_terms = index.list_all_terms()
+            similar = [t for t in all_terms if term_id.lower() in t["id"].lower()][:5]
+            
+            return json.dumps({
+                "error": f"Glossary term '{term_id}' not found",
+                "suggestion": "Use list_glossary_terms() to find available terms",
+                "similar_terms": [{"id": t["id"], "title": t["title"]} for t in similar] if similar else []
+            }, indent=2)
+        
+        return json.dumps(term, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Error getting glossary term: {e}")
+        return json.dumps({"error": str(e)}, indent=2)
+
+
+# ============================================================================
+# GLOSSARY RESOURCES (For MCP Clients That Support Resources)
+# ============================================================================
+
+@mcp.resource("obp://glossary")
+def get_glossary_list() -> str:
+    """
+    Get the complete list of OBP glossary terms.
+    
+    Returns a formatted list of all available glossary terms with their IDs and titles.
+    Each term can be accessed individually via obp://glossary/{term_id}.
+    """
+    try:
+        index = get_glossary_index()
+        terms = index.list_all_terms()
+        
+        # Format as a readable text list
+        output = f"# OBP Glossary Terms ({len(terms)} total)\n\n"
+        output += "Available glossary terms:\n\n"
+        
+        for term in terms[:50]:  # Show first 50 terms
+            output += f"- **{term['title']}** (id: `{term['id']}`)\n"
+        
+        if len(terms) > 50:
+            output += f"\n... and {len(terms) - 50} more terms.\n"
+        
+        output += "\nAccess individual terms using: obp://glossary/{term_id}\n"
+        
+        return output
+        
+    except Exception as e:
+        logger.error(f"Error listing glossary terms: {e}")
+        return f"Error: {str(e)}"
+
+
+@mcp.resource("obp://glossary/{term_id}")
+def get_glossary_term(term_id: str) -> str:
+    """
+    Get a specific glossary term by ID.
+    
+    Returns the full glossary term including title and description in markdown format.
+    
+    Args:
+        term_id: The unique identifier of the glossary term (e.g., "account-account-id")
+    
+    Example URIs:
+        - obp://glossary/account-account-id
+        - obp://glossary/api
+        - obp://glossary/bank-bank-id
+    """
+    try:
+        index = get_glossary_index()
+        term = index.get_term(term_id)
+        
+        if not term:
+            # Try to find similar terms
+            all_terms = index.list_all_terms()
+            similar = [t for t in all_terms if term_id.lower() in t["id"].lower()][:5]
+            
+            output = f"# Error: Glossary term '{term_id}' not found\n\n"
+            output += "Use obp://glossary to list all available terms.\n\n"
+            
+            if similar:
+                output += "Similar terms:\n"
+                for t in similar:
+                    output += f"- {t['title']} (id: `{t['id']}`)\n"
+            
+            return output
+        
+        # Format the term as markdown
+        output = f"# {term['title']}\n\n"
+        output += f"**ID:** `{term['id']}`\n\n"
+        output += "## Description\n\n"
+        
+        description = term.get('description', {})
+        markdown = description.get('markdown', '')
+        
+        if markdown:
+            output += markdown
+        else:
+            output += "No description available."
+        
+        return output
+        
+    except Exception as e:
+        logger.error(f"Error getting glossary term: {e}")
+        return f"Error: {str(e)}"
 
 
 # ============================================================================

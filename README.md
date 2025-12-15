@@ -45,15 +45,23 @@ OBP_BASE_URL=https://apisandbox.openbankproject.com
 OBP_API_VERSION=v5.1.0
 ```
 
-### Generate Endpoint Index
+### Generate Endpoint and Glossary Indexes
 
 Generate the lightweight endpoint index from the OBP API:
 
 ```bash
-python scripts/generate_endpoint_index.py
+uv run python scripts/generate_endpoint_index.py
 ```
 
 This creates `database/endpoint_index.json` with endpoint summaries.
+
+Generate the glossary index:
+
+```bash
+uv run python scripts/generate_glossary_index.py
+```
+
+This creates `database/glossary_index.json` with glossary term definitions.
 
 ### Running the Server
 
@@ -67,6 +75,9 @@ uv sync
 
 # Quick start with default settings (recommended)
 ./run_server.sh
+
+# Development mode with auto-reload on file changes
+./run_server.sh --watch
 ```
 
 The server will start on `http://0.0.0.0:8000` by default. You can customize the configuration:
@@ -105,7 +116,9 @@ For reference, see the example configuration in `.vscode/mcp.json.example`.
 
 ## Usage
 
-### Tool 1: List Endpoints by Tag
+### Endpoint Tools
+
+#### Tool 1: List Endpoints by Tag
 
 Discover endpoints filtered by tags:
 
@@ -115,7 +128,7 @@ list_endpoints_by_tag(["Account", "Transaction"])
 
 Returns lightweight summaries (id, method, path, summary, tags) without full schemas.
 
-### Tool 2: Get Endpoint Schema
+#### Tool 2: Get Endpoint Schema
 
 Fetch the full OpenAPI schema for a specific endpoint:
 
@@ -123,7 +136,7 @@ Fetch the full OpenAPI schema for a specific endpoint:
 get_endpoint_schema("vVERSION-getBanks")
 ```
 
-### Tool 3: Call OBP API
+#### Tool 3: Call OBP API
 
 Execute an API request:
 
@@ -134,6 +147,49 @@ call_obp_api(
     headers={"Authorization": "DirectLogin token=..."}
 )
 ```
+
+### Glossary Tools
+
+Access OBP glossary terms (800+ definitions):
+
+#### List Glossary Terms
+
+Search and list glossary terms:
+
+```python
+list_glossary_terms()  # List all terms
+list_glossary_terms("oauth")  # Search for OAuth-related terms
+```
+
+Returns a lightweight list with term IDs and titles.
+
+#### Get Glossary Term
+
+Get the full definition of a specific term:
+
+```python
+get_glossary_term("oauth")  # Get OAuth definition
+get_glossary_term("account-account-id")  # Get Account ID definition
+```
+
+Returns the complete term with markdown and HTML descriptions.
+
+### Glossary Resources
+
+Access OBP glossary terms via MCP resources (for clients that support resources):
+
+#### List All Glossary Terms
+
+Access `obp://glossary` to get all 800+ glossary terms with IDs and titles.
+
+#### Get Specific Term
+
+Access `obp://glossary/{term_id}` to get a specific term's full definition with markdown and HTML descriptions.
+
+Examples:
+- `obp://glossary/account-account-id` - Account ID definition
+- `obp://glossary/api` - API definition
+- `obp://glossary/bank-bank-id` - Bank ID definition
 
 ## Documentation
 

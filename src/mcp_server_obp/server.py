@@ -25,8 +25,6 @@ from mcp.server.session import ServerSession
 from mcp.server.auth.settings import AuthSettings
 from pydantic import AnyUrl
 
-from src.tools.retrieval import endpoint_retrieval_graph, glossary_retrieval_graph, GlossarySearchInput, GlossarySearchOutput, EndpointSearchInput, EndpointSearchOutput
-from utils.formatters import endpoint_formatter, glossary_formatter
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
 
@@ -218,43 +216,6 @@ def call_obp_api(
     except Exception as e:
         logger.error(f"Error calling OBP API: {e}")
         return json.dumps({"error": str(e)}, indent=2)
-
-
-# ============================================================================
-# DEPRECATED RAG-BASED TOOLS (Legacy)
-# ============================================================================
-# These tools use RAG (Retrieval Augmented Generation) with vector databases
-# and are more expensive in terms of tokens and API calls. They are kept for
-# backward compatibility but the new tag-based tools above are recommended.
-
-@mcp.tool()
-async def retrieve_endpoints(query: str) -> str | None:
-    """
-    [DEPRECATED - Use list_endpoints_by_tag() instead]
-    
-    Retrieve Relevant Open Bank Project API Endpoints based on a query using RAG.
-    This tool is deprecated in favor of the more cost-effective tag-based approach.
-    Use list_endpoints_by_tag() -> get_endpoint_schema() -> call_obp_api() instead.
-    """
-    logger.warning("retrieve_endpoints() is deprecated. Use list_endpoints_by_tag() instead.")
-    _input = EndpointSearchInput(question=query)
-    
-    output = await endpoint_retrieval_graph.ainvoke(_input)
-    
-    formatted_output = endpoint_formatter(output["output_documents"])
-    
-    return formatted_output
-
-@mcp.tool()
-async def retrieve_glossary_terms(query: str) -> str | None:
-    """Retrieve Relevant Glossary Terms based on a query."""
-    _input = GlossarySearchInput(question=query)
-    
-    glossary_output = await glossary_retrieval_graph.ainvoke(_input)
-    
-    formatted_output = glossary_formatter(glossary_output["output_documents"])
-    
-    return formatted_output
 
 
 # ============================================================================

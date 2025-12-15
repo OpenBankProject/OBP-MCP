@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.tools.glossary_index import GlossaryIndex
-from database.populate_vector_db import get_obp_config, fetch_obp_data
+from database.obp_utils import get_obp_config, fetch_obp_data
 
 
 def normalize_term_id(title: str) -> str:

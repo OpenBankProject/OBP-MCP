@@ -7,13 +7,16 @@ OBP-MCP provides a Model Context Protocol (MCP) server that enables AI assistant
 
 ## Features
 
-- **🚀 Hybrid Tag-Based Routing**: Fast, cost-effective endpoint discovery
-- **📊 Lightweight Index**: Minimal token usage with on-demand schema loading
-- **🔧 Three Core Tools**:
+- **🚀 Tag-Based Routing**: Fast, cost-effective endpoint discovery
+- **📊 Lightweight Indexes**: Minimal token usage with on-demand schema loading
+- **🔧 Core Endpoint Tools**:
   - `list_endpoints_by_tag` - Discover endpoints by category
   - `get_endpoint_schema` - Fetch full OpenAPI schemas on-demand
   - `call_obp_api` - Execute API requests with validation
-- **📚 Backward Compatible**: Legacy RAG-based tools remain available
+- **📚 Glossary Tools**: Access 800+ OBP term definitions
+  - `list_glossary_terms` - Search and list glossary terms
+  - `get_glossary_term` - Get full term definitions
+- **🔄 MCP Resources**: URI-based access to glossary terms
 
 ## Quick Start
 
@@ -194,38 +197,17 @@ Examples:
 ## Documentation
 
 - **[Hybrid Routing Guide](docs/HYBRID_ROUTING.md)** - Detailed architecture and usage
-- **[Database README](database/README.md)** - Vector database setup (for RAG tools)
 
 ## Architecture
 
-The new hybrid approach replaces expensive RAG operations with a three-step process:
+The system uses lightweight JSON indexes for fast lookups:
 
-1. **Tag Classification** - Identify relevant endpoint categories
-2. **Lightweight Index** - Return endpoint summaries (minimal tokens)
-3. **On-Demand Schema** - Load full schemas only when needed
+1. **Tag-Based Discovery** - Filter 600+ endpoints by category tags
+2. **Lightweight Index** - Minimal endpoint summaries (id, method, path, tags)
+3. **On-Demand Schema** - Load full OpenAPI schemas only when needed
+4. **Glossary Index** - Fast lookup of 800+ OBP term definitions
 
 See [docs/HYBRID_ROUTING.md](docs/HYBRID_ROUTING.md) for complete details.
-
-## Migration from RAG
-
-If you're using the deprecated `retrieve_endpoints()` tool:
-
-**Old (RAG):**
-```python
-retrieve_endpoints("I need to get bank accounts")
-```
-
-**New (Hybrid):**
-```python
-# Step 1: Discover
-list_endpoints_by_tag(["Account", "Bank"])
-
-# Step 2: Get schema (if needed)
-get_endpoint_schema("vVERSION-privateAccountsAtOneBank")
-
-# Step 3: Call API
-call_obp_api("vVERSION-privateAccountsAtOneBank", ...)
-```
 
 ## Development
 

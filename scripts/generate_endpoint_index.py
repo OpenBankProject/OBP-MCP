@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.tools.endpoint_index import EndpointIndex
-from database.populate_vector_db import get_obp_config, fetch_obp_data
+from database.obp_utils import get_obp_config, fetch_obp_data
 
 
 def main():
@@ -40,10 +40,10 @@ def main():
     args = parser.parse_args()
     
     try:
-        # Get configuration (reuses existing function from populate_vector_db)
+        # Get configuration
         config = get_obp_config(args.endpoints)
         
-        # Fetch swagger data (reuses existing function from populate_vector_db)
+        # Fetch swagger data
         print("\n" + "="*50)
         print("FETCHING SWAGGER DATA")
         print("="*50)

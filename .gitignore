@@ -6,6 +6,7 @@ __pycache__/
 #database 
 data/
 chroma.sqlite3
+database/
 
 # C extensions
 *.so

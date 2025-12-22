@@ -5,6 +5,10 @@ import json
 import requests
 from pathlib import Path
 from typing import List
+from dotenv import load_dotenv
+
+# Load environment variables from .env file before anything else
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -33,6 +37,8 @@ mcp = FastMCP(
     stateless_http=True,
     json_response=True,
     log_level="DEBUG",
+    host=os.getenv("FASTMCP_HOST", "127.0.0.1"),
+    port=int(os.getenv("FASTMCP_PORT", "9100")),
 )
 
 logger = logging.getLogger(__name__)

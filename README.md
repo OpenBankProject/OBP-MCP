@@ -88,7 +88,7 @@ The server will start on `http://0.0.0.0:8000` by default. You can customize the
 ```bash
 # Custom host and port
 export MCP_SERVER_HOST=127.0.0.1
-export MCP_SERVER_PORT=9000
+export MCP_SERVER_PORT=9100
 ./run_server.sh
 
 # Or run directly with Python
@@ -265,4 +265,3 @@ For issues or questions:
 - Check [docs/HYBRID_ROUTING.md](docs/HYBRID_ROUTING.md) for detailed usage
 - Verify environment variables are set correctly
 - Ensure endpoint index is up to date
-

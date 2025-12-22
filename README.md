@@ -14,7 +14,13 @@ OBP-MCP provides a Model Context Protocol (MCP) server that enables AI assistant
   - `get_endpoint_schema` - Fetch full OpenAPI schemas on-demand
   - `call_obp_api` - Execute API requests with validation
 - **📚 Glossary Tools**: Access 800+ OBP term definitions
-  - `list_glossary_terms` - Search and list glossary terms
+  - `list_glossary_terms` - Searc# OBP API Configuration
+  OBP_BASE_URL="http://127.0.0.1:8080"
+  OBP_API_VERSION="v6.0.0"
+  
+  # FastMCP Server Configuration
+  FASTMCP_HOST=127.0.0.1
+  FASTMCP_PORT=9100h and list glossary terms
   - `get_glossary_term` - Get full term definitions
 - **🔄 MCP Resources**: URI-based access to glossary terms
 
@@ -41,11 +47,13 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 ### Configuration
 
-Create a `.env` file with your OBP API configuration:
+Create a `.env` file with your configuration:
 
 ```bash
 OBP_BASE_URL=https://apisandbox.openbankproject.com
 OBP_API_VERSION=v5.1.0
+FASTMCP_HOST=127.0.0.1
+FASTMCP_PORT=9100
 ```
 
 ### Generate Endpoint and Glossary Indexes
@@ -83,17 +91,7 @@ uv sync
 ./run_server.sh --watch
 ```
 
-The server will start on `http://0.0.0.0:8000` by default. You can customize the configuration:
-
-```bash
-# Custom host and port
-export MCP_SERVER_HOST=127.0.0.1
-export MCP_SERVER_PORT=9100
-./run_server.sh
-
-# Or run directly with Python
-python src/mcp_server_obp/server.py
-```
+The server starts on `http://0.0.0.0:9100` by default. Customize via `.env` or environment variables.
 
 #### Option 2: VS Code Integration
 
@@ -108,7 +106,7 @@ Then configure the server in your VS Code MCP settings (`~/.config/Code/User/mcp
 {
   "mcpServers": {
     "obp-mcp": {
-			"url": "http://0.0.0.0:8000/mcp",
+			"url": "http://0.0.0.0:9100/mcp",
 			"type": "http"
 		}
   }

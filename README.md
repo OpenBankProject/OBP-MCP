@@ -14,7 +14,13 @@ OBP-MCP provides a Model Context Protocol (MCP) server that enables AI assistant
   - `get_endpoint_schema` - Fetch full OpenAPI schemas on-demand
   - `call_obp_api` - Execute API requests with validation
 - **📚 Glossary Tools**: Access 800+ OBP term definitions
-  - `list_glossary_terms` - Search and list glossary terms
+  - `list_glossary_terms` - Searc# OBP API Configuration
+  OBP_BASE_URL="http://127.0.0.1:8080"
+  OBP_API_VERSION="v6.0.0"
+  
+  # FastMCP Server Configuration
+  FASTMCP_HOST=127.0.0.1
+  FASTMCP_PORT=9100h and list glossary terms
   - `get_glossary_term` - Get full term definitions
 - **🔄 MCP Resources**: URI-based access to glossary terms
 
@@ -41,11 +47,13 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 ### Configuration
 
-Create a `.env` file with your OBP API configuration:
+Create a `.env` file with your configuration:
 
 ```bash
 OBP_BASE_URL=https://apisandbox.openbankproject.com
 OBP_API_VERSION=v5.1.0
+FASTMCP_HOST=127.0.0.1
+FASTMCP_PORT=9100
 ```
 
 ### Generate Endpoint and Glossary Indexes
@@ -68,8 +76,6 @@ This creates `database/glossary_index.json` with glossary term definitions.
 
 ### Running the Server
 
-#### Option 1: HTTP Server (Recommended)
-
 Run the server as an HTTP service:
 
 ```bash
@@ -83,19 +89,9 @@ uv sync
 ./run_server.sh --watch
 ```
 
-The server will start on `http://0.0.0.0:8000` by default. You can customize the configuration:
+The server starts on `http://0.0.0.0:9100` by default. Customize via `.env` or environment variables.
 
-```bash
-# Custom host and port
-export MCP_SERVER_HOST=127.0.0.1
-export MCP_SERVER_PORT=9000
-./run_server.sh
-
-# Or run directly with Python
-python src/mcp_server_obp/server.py
-```
-
-#### Option 2: VS Code Integration
+### VS Code Integration
 
 First, start the HTTP server:
 ```bash
@@ -108,7 +104,7 @@ Then configure the server in your VS Code MCP settings (`~/.config/Code/User/mcp
 {
   "mcpServers": {
     "obp-mcp": {
-			"url": "http://0.0.0.0:8000/mcp",
+			"url": "http://0.0.0.0:9100/mcp",
 			"type": "http"
 		}
   }
@@ -116,6 +112,63 @@ Then configure the server in your VS Code MCP settings (`~/.config/Code/User/mcp
 ```
 
 For reference, see the example configuration in `.vscode/mcp.json.example`.
+
+### Zed Integration
+
+With this version
+Zed 0.217.3 
+80433cb239e868271457ac376673a5f75bc4adb1
+
+0.217.3+stable.105.80433cb239e868271457ac376673a5f75bc4adb1
+
+First, start the HTTP server:
+```bash
+./run_server.sh
+```
+
+Check this works: 
+npx -y mcp-remote http://127.0.0.1:9100/mcp
+
+You should see something like:
+
+[570948] Using automatically selected callback port: 30438
+[570948] Discovering OAuth server configuration...
+[570948] [570948] Connecting to remote server: http://127.0.0.1:9100/mcp
+[570948] Using transport strategy: http-first
+[570948] Connected to remote server using StreamableHTTPClientTransport
+[570948] Local STDIO server running
+[570948] Proxy established successfully between local STDIO and remote StreamableHTTPClientTransport
+[570948] Press Ctrl+C to exit
+
+
+
+Add this key to your settings.
+
+vi ~/.config/zed/settings.json
+
+
+```json
+
+"context_servers": {
+  "obp-mcp": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "mcp-remote",
+      "http://127.0.0.1:9100/mcp"
+    ],
+    "env": {}
+  }
+}
+
+```
+
+To check Zed is seeing it:
+
+grep -Ei "obp-mcp|context server|mcp-remote|9100" ~/.local/share/zed/logs/Zed.log | tail -n 80
+
+Then ask the Zed Agent: hi do you have access to the obp mcp ? 
+
 
 ## Usage
 
@@ -265,4 +318,3 @@ For issues or questions:
 - Check [docs/HYBRID_ROUTING.md](docs/HYBRID_ROUTING.md) for detailed usage
 - Verify environment variables are set correctly
 - Ensure endpoint index is up to date
-

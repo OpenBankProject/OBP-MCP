@@ -42,18 +42,18 @@ else:
     if not oauth_provider_url or not resource_server_url:
         raise ValueError("OAUTH_ISSUER_URL and RESOURCE_SERVER_URL must be set when ENABLE_OAUTH is true.")
     
-    verifier = JWTVerifier(
+    token_verifier = JWTVerifier(
         jwks_uri=f"{oauth_provider_url}/.well-known/jwks.json",
         issuer=oauth_provider_url,
-        audience="mcp-production-api"
+        audience=resource_server_url
     )
     
     auth = RemoteAuthProvider(
-            token_verifier=verifier,
+            token_verifier=token_verifier,
             authorization_servers=[AnyHttpUrl(oauth_provider_url)],
-            base_url=resource_server_url,  # Your server base URL
+            base_url=oauth_provider_url,  # Your server base URL
             # # Optional: customize allowed client redirect URIs (defaults to localhost only)
-            # allowed_client_redirect_uris=["http://localhost:*", "http://127.0.0.1:*"]
+            #allowed_client_redirect_uris=["http://localhost:*", "http://127.0.0.1:*"]
         )
     
 

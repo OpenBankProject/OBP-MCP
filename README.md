@@ -76,8 +76,6 @@ This creates `database/glossary_index.json` with glossary term definitions.
 
 ### Running the Server
 
-#### Option 1: HTTP Server (Recommended)
-
 Run the server as an HTTP service:
 
 ```bash
@@ -93,7 +91,7 @@ uv sync
 
 The server starts on `http://0.0.0.0:9100` by default. Customize via `.env` or environment variables.
 
-#### Option 2: VS Code Integration
+### VS Code Integration
 
 First, start the HTTP server:
 ```bash
@@ -114,6 +112,63 @@ Then configure the server in your VS Code MCP settings (`~/.config/Code/User/mcp
 ```
 
 For reference, see the example configuration in `.vscode/mcp.json.example`.
+
+### Zed Integration
+
+With this version
+Zed 0.217.3 
+80433cb239e868271457ac376673a5f75bc4adb1
+
+0.217.3+stable.105.80433cb239e868271457ac376673a5f75bc4adb1
+
+First, start the HTTP server:
+```bash
+./run_server.sh
+```
+
+Check this works: 
+npx -y mcp-remote http://127.0.0.1:9100/mcp
+
+You should see something like:
+
+[570948] Using automatically selected callback port: 30438
+[570948] Discovering OAuth server configuration...
+[570948] [570948] Connecting to remote server: http://127.0.0.1:9100/mcp
+[570948] Using transport strategy: http-first
+[570948] Connected to remote server using StreamableHTTPClientTransport
+[570948] Local STDIO server running
+[570948] Proxy established successfully between local STDIO and remote StreamableHTTPClientTransport
+[570948] Press Ctrl+C to exit
+
+
+
+Add this key to your settings.
+
+vi ~/.config/zed/settings.json
+
+
+```json
+
+"context_servers": {
+  "obp-mcp": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "mcp-remote",
+      "http://127.0.0.1:9100/mcp"
+    ],
+    "env": {}
+  }
+}
+
+```
+
+To check Zed is seeing it:
+
+grep -Ei "obp-mcp|context server|mcp-remote|9100" ~/.local/share/zed/logs/Zed.log | tail -n 80
+
+Then ask the Zed Agent: hi do you have access to the obp mcp ? 
+
 
 ## Usage
 

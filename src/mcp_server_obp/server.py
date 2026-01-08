@@ -25,7 +25,6 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from fastmcp import FastMCP
-from mcp.server.session import ServerSession
 from fastmcp.server.auth import RemoteAuthProvider
 from fastmcp.server.auth.providers.jwt import JWTVerifier
 from pydantic import AnyHttpUrl
@@ -33,9 +32,11 @@ from pydantic import AnyHttpUrl
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
 
+from mcp_server_obp.lifespan import lifespan
+
 logger = logging.getLogger(__name__)
 
-if not os.getenv("ENABLE_OAUTH"):
+if not os.getenv("ENABLE_OAUTH") or os.getenv("ENABLE_OAUTH").lower() == "false":
     auth = None
     logger.info("OAuth is disabled; running in unauthenticated mode.")
 else:

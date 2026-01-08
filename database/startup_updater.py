@@ -54,9 +54,10 @@ class IndexStartupUpdater:
             True if successful, False otherwise
         """
         try:
-           self._update_glossary_index()
-           self._update_endpoint_index()
-           return True
+           if self._update_glossary_index() and self._update_endpoint_index():
+               return True
+           else:
+               return False
                 
         except subprocess.TimeoutExpired:
             logger.error("Index creation timed out after 5 minutes")
@@ -75,7 +76,7 @@ class IndexStartupUpdater:
         try:
             # Get the project root and script path
             project_root = Path(__file__).parent.parent
-            glossary_script_path = project_root / "scripts" / "database" / "generate_glossary_index.py"
+            glossary_script_path = project_root / "scripts" / "generate_glossary_index.py"
             
             if not glossary_script_path.exists():
                 logger.error(f"Glossary index script not found at {glossary_script_path}")
@@ -120,7 +121,7 @@ class IndexStartupUpdater:
         try:
             # Get the project root and script path
             project_root = Path(__file__).parent.parent
-            endpoint_script_path = project_root / "scripts" / "database" / "generate_endpoint_index.py"
+            endpoint_script_path = project_root / "scripts" / "generate_endpoint_index.py"
             
             if not endpoint_script_path.exists():
                 logger.error(f"Endpoint index script not found at {endpoint_script_path}")

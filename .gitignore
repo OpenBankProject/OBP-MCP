@@ -10,6 +10,7 @@ chroma.sqlite3
 endpoint_index.json
 endpoint_schemas.json
 glossary_index.json
+.obp_data_hashes.json
 
 # C extensions
 *.so

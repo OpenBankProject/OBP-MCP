@@ -68,6 +68,7 @@ mcp = FastMCP(
         auth=auth,
         host=os.getenv("FASTMCP_HOST", "127.0.0.1"),
     port=int(os.getenv("FASTMCP_PORT", "9100")),
+    lifespan=lifespan
 )
 
 

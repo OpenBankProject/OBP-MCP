@@ -4,9 +4,7 @@ __pycache__/
 *$py.class
 
 #database
-data/
 chroma.sqlite3
-database/
 
 # Generated index files (even if database/ is tracked)
 endpoint_index.json

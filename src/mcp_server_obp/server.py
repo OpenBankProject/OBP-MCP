@@ -31,6 +31,7 @@ from pydantic import AnyUrl
 
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
+from src.mcp_server_obp.lifespan import lifespan
 
 mcp = FastMCP(
     "Open Bank Project",
@@ -39,6 +40,7 @@ mcp = FastMCP(
     log_level="DEBUG",
     host=os.getenv("FASTMCP_HOST", "127.0.0.1"),
     port=int(os.getenv("FASTMCP_PORT", "9100")),
+    lifespan=lifespan
 )
 
 logger = logging.getLogger(__name__)
@@ -407,5 +409,7 @@ def get_glossary_term(term_id: str) -> str:
 
 if __name__ == "__main__":
     # Run the FastMCP server with http transport (default)
-    # This is used for local MCP clients like Claude Desktop
+    
+    
+    
     mcp.run(transport="streamable-http")

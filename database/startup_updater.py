@@ -43,7 +43,7 @@ class IndexStartupUpdater:
         Returns:
             True if UPDATE_DATABASE_ON_STARTUP is set to 'true' (case-insensitive)
         """
-        flag = os.getenv("UPDATE_INDEX_ON_STARTUP", "false").lower()
+        flag = os.getenv("UPDATE_INDEX_ON_STARTUP", "true").lower()
         return flag in ["true", "1", "yes", "on"]
     
     def run_populate_scripts(self) -> bool:

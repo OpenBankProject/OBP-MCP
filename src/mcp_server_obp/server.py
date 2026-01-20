@@ -27,6 +27,8 @@ if str(_project_root) not in sys.path:
 from fastmcp import FastMCP
 from fastmcp.server.auth import RemoteAuthProvider
 from fastmcp.server.auth.providers.jwt import JWTVerifier
+from src.temp.keycloak import KeycloakAuthProvider
+from fastmcp.server.dependencies import get_access_token
 from pydantic import AnyHttpUrl
 
 from src.tools.endpoint_index import get_endpoint_index
@@ -42,33 +44,21 @@ if not os.getenv("ENABLE_OAUTH") or os.getenv("ENABLE_OAUTH").lower() == "false"
 else:
     logger.info("OAuth is enabled; setting up authentication.")
     # Configure JWT verification against your identity provider
-    oauth_provider_url = os.getenv("OAUTH_ISSUER_URL")
-    resource_server_url = os.getenv("RESOURCE_SERVER_URL")
-    if not oauth_provider_url or not resource_server_url:
-        raise ValueError("OAUTH_ISSUER_URL and RESOURCE_SERVER_URL must be set when ENABLE_OAUTH is true.")
+    keycloak_realm_url = os.getenv("KEYCLOAK_REALM_URL")
+    base_url = os.getenv("BASE_URL")
+    if not keycloak_realm_url or not base_url:
+        raise ValueError("KEYCLOAK_REALM_URL and BASE_URL must be set when ENABLE_OAUTH is true.")
     
-    token_verifier = JWTVerifier(
-        jwks_uri=f"{oauth_provider_url}/.well-known/jwks.json",
-        issuer=oauth_provider_url,
-        audience=resource_server_url
+    auth = KeycloakAuthProvider(
+        realm_url=AnyHttpUrl(keycloak_realm_url),
+        base_url=AnyHttpUrl(base_url),
+        required_scopes=["openid", "profile", "email"],
     )
-    
-    auth = RemoteAuthProvider(
-            token_verifier=token_verifier,
-            authorization_servers=[AnyHttpUrl(oauth_provider_url)],
-            base_url=oauth_provider_url,  # Your server base URL
-            # # Optional: customize allowed client redirect URIs (defaults to localhost only)
-            #allowed_client_redirect_uris=["http://localhost:*", "http://127.0.0.1:*"]
-        )
     
 
 mcp = FastMCP(
-        "Open Bank Project",
-        stateless_http=True,
-        json_response=True,
-        auth=auth,
-        host=os.getenv("FASTMCP_HOST", "127.0.0.1"),
-    port=int(os.getenv("FASTMCP_PORT", "9100")),
+    "Open Bank Project",
+    auth=auth,
     lifespan=lifespan
 )
 
@@ -117,6 +107,16 @@ def list_endpoints_by_tag(tags: List[str]) -> str:
         logger.error(f"Error listing endpoints by tag: {e}")
         return json.dumps({"error": str(e)}, indent=2)
 
+@mcp.tool
+async def get_access_token_claims() -> dict:
+    """Get the authenticated user's access token claims."""
+    token = get_access_token()
+    return {
+        "sub": token.claims.get("sub"),
+        "name": token.claims.get("name"),
+        "preferred_username": token.claims.get("preferred_username"),
+        "scope": token.claims.get("scope")
+    }
 
 @mcp.tool()
 def get_endpoint_schema(endpoint_id: str) -> str:
@@ -439,4 +439,11 @@ def glossary_term(term_id: str) -> str:
 if __name__ == "__main__":
     # Run the FastMCP server with http transport (default)
     # This is used for local MCP clients like Claude Desktop
-    mcp.run(transport="streamable-http", log_level="DEBUG")
+    mcp.run(
+        transport="streamable-http",
+        log_level="DEBUG",
+        #json_reponse=True,
+        stateless_http=True,
+        host=os.getenv("FASTMCP_HOST", "127.0.0.1"),
+        port=int(os.getenv("FASTMCP_PORT", "9100")),
+    )

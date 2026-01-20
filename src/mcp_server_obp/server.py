@@ -52,7 +52,7 @@ else:
     auth = KeycloakAuthProvider(
         realm_url=AnyHttpUrl(keycloak_realm_url),
         base_url=AnyHttpUrl(base_url),
-        required_scopes=["openid", "profile", "email"],
+        required_scopes=["openid", "profile", "email", "offline_access"],
     )
     
 

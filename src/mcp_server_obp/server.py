@@ -25,35 +25,20 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from fastmcp import FastMCP
-from fastmcp.server.auth import RemoteAuthProvider
-from fastmcp.server.auth.providers.jwt import JWTVerifier
-from src.temp.keycloak import KeycloakAuthProvider
 from fastmcp.server.dependencies import get_access_token
-from pydantic import AnyHttpUrl
 
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
 
 from mcp_server_obp.lifespan import lifespan
+from mcp_server_obp.auth import get_auth_provider
 
 logger = logging.getLogger(__name__)
 
-if not os.getenv("ENABLE_OAUTH") or os.getenv("ENABLE_OAUTH").lower() == "false":
-    auth = None
-    logger.info("OAuth is disabled; running in unauthenticated mode.")
-else:
-    logger.info("OAuth is enabled; setting up authentication.")
-    # Configure JWT verification against your identity provider
-    keycloak_realm_url = os.getenv("KEYCLOAK_REALM_URL")
-    base_url = os.getenv("BASE_URL")
-    if not keycloak_realm_url or not base_url:
-        raise ValueError("KEYCLOAK_REALM_URL and BASE_URL must be set when ENABLE_OAUTH is true.")
-    
-    auth = KeycloakAuthProvider(
-        realm_url=AnyHttpUrl(keycloak_realm_url),
-        base_url=AnyHttpUrl(base_url),
-        required_scopes=["openid", "profile", "email", "offline_access"],
-    )
+# Initialize authentication provider based on environment configuration
+# Supports: keycloak, obp-oidc, or none (disabled)
+# See auth.py for configuration details
+auth = get_auth_provider()
     
 
 mcp = FastMCP(
@@ -107,16 +92,17 @@ def list_endpoints_by_tag(tags: List[str]) -> str:
         logger.error(f"Error listing endpoints by tag: {e}")
         return json.dumps({"error": str(e)}, indent=2)
 
-@mcp.tool
-async def get_access_token_claims() -> dict:
-    """Get the authenticated user's access token claims."""
-    token = get_access_token()
-    return {
-        "sub": token.claims.get("sub"),
-        "name": token.claims.get("name"),
-        "preferred_username": token.claims.get("preferred_username"),
-        "scope": token.claims.get("scope")
-    }
+# Should only be use for testing/debugging oauth. Returns token claims, i.e. verifying that a user has authenticated.
+# @mcp.tool
+# async def get_access_token_claims() -> dict:
+#     """Get the authenticated user's access token claims."""
+#     token = get_access_token()
+#     return {
+#         "sub": token.claims.get("sub"),
+#         "name": token.claims.get("name"),
+#         "preferred_username": token.claims.get("preferred_username"),
+#         "scope": token.claims.get("scope")
+#     }
 
 @mcp.tool()
 def get_endpoint_schema(endpoint_id: str) -> str:

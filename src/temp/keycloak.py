@@ -162,6 +162,16 @@ class KeycloakAuthProvider(RemoteAuthProvider):
                     metadata["registration_endpoint"] = f"{base_url}/register"
 
                     return JSONResponse(metadata)
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Failed to fetch Keycloak metadata: {e}")
+                logger.error(f"Keycloak response body: {e.response.text}")
+                return JSONResponse(
+                    {
+                        "error": "server_error",
+                        "error_description": f"Failed to fetch Keycloak metadata: {e}",
+                    },
+                    status_code=500,
+                )
             except Exception as e:
                 logger.error(f"Failed to fetch Keycloak metadata: {e}")
                 return JSONResponse(

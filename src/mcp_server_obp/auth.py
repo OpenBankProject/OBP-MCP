@@ -138,6 +138,13 @@ class KeycloakAuthProvider(RemoteAuthProvider):
                     metadata["registration_endpoint"] = f"{base_url}/register"
 
                     return JSONResponse(metadata)
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Failed to fetch Keycloak metadata: {e}")
+                logger.error(f"Keycloak response body: {e.response.text}")
+                return JSONResponse(
+                    {"error": "server_error", "error_description": f"Failed to fetch Keycloak metadata: {e}"},
+                    status_code=500,
+                )
             except Exception as e:
                 logger.error(f"Failed to fetch Keycloak metadata: {e}")
                 return JSONResponse(
@@ -302,6 +309,13 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                     response.raise_for_status()
                     metadata = response.json()
                     return JSONResponse(metadata)
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Failed to fetch OBP-OIDC metadata: {e}")
+                logger.error(f"OBP-OIDC response body: {e.response.text}")
+                return JSONResponse(
+                    {"error": "server_error", "error_description": f"Failed to fetch OBP-OIDC metadata: {e}"},
+                    status_code=500,
+                )
             except Exception as e:
                 logger.error(f"Failed to fetch OBP-OIDC metadata: {e}")
                 return JSONResponse(
@@ -319,6 +333,13 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                     response.raise_for_status()
                     metadata = response.json()
                     return JSONResponse(metadata)
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Failed to fetch OBP-OIDC openid-configuration: {e}")
+                logger.error(f"OBP-OIDC response body: {e.response.text}")
+                return JSONResponse(
+                    {"error": "server_error", "error_description": f"Failed to fetch OBP-OIDC discovery: {e}"},
+                    status_code=500,
+                )
             except Exception as e:
                 logger.error(f"Failed to fetch OBP-OIDC openid-configuration: {e}")
                 return JSONResponse(

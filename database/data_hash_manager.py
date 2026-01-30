@@ -40,16 +40,37 @@ class DataHashManager:
         if not self.base_url or not self.api_version:
             raise ValueError("OBP_BASE_URL and OBP_API_VERSION must be set in environment")
     
+    def check_obp_health(self) -> bool:
+        """
+        Check if OBP API is up and responding.
+
+        Returns:
+            True if OBP is healthy, False otherwise
+        """
+        root_url = f"{self.base_url}/obp/{self.api_version}/root"
+        try:
+            response = requests.get(root_url, timeout=10)
+            response.raise_for_status()
+            logger.debug(f"OBP health check passed: {root_url}")
+            return True
+        except requests.exceptions.HTTPError as e:
+            logger.warning(f"OBP health check failed ({root_url}): {e}")
+            logger.warning(f"OBP response body: {response.text}")
+            return False
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"OBP health check failed ({root_url}): {e}")
+            return False
+
     def _fetch_obp_data(self, url: str) -> Dict[str, Any]:
         """
         Fetch data from OBP endpoint.
-        
+
         Args:
             url: The endpoint URL to fetch from
-            
+
         Returns:
             JSON response data
-            
+
         Raises:
             requests.RequestException: If the request fails
         """
@@ -58,6 +79,15 @@ class DataHashManager:
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.HTTPError as e:
+            # Log the response body to see what OBP is telling us
+            try:
+                error_body = response.text
+                logger.error(f"HTTP error from {url}: {e}")
+                logger.error(f"OBP response body: {error_body}")
+            except Exception:
+                logger.error(f"HTTP error from {url}: {e}")
+            raise
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching data from {url}: {e}")
             raise
@@ -188,16 +218,23 @@ class DataHashManager:
     def check_for_updates(self, endpoint_type: str = "all") -> Tuple[bool, Dict[str, bool]]:
         """
         Check if OBP data has changed since last import.
-        
+
         Args:
             endpoint_type: Type of endpoints to check ("static", "dynamic", or "all")
-            
+
         Returns:
             Tuple of (needs_update, changes_dict)
+
+        Raises:
+            ConnectionError: If OBP API is not available
         """
+        # First check if OBP is up
+        if not self.check_obp_health():
+            raise ConnectionError("OBP API is not available - skipping update check")
+
         current_hashes = self.fetch_current_data_hashes(endpoint_type)
         stored_hashes = self.load_stored_hashes()
-        
+
         return self.compare_hashes(current_hashes, stored_hashes)
     
     def update_stored_hashes(self, endpoint_type: str = "all") -> None:

@@ -97,7 +97,7 @@ class IndexStartupUpdater:
             
             if result.returncode == 0:
                 logger.info("Glossary index creation completed successfully")
-                logger.debug(f"Script output: {result.stdout}")
+                logger.info(f"Script output: {result.stdout}")
                 return True
             else:
                 logger.error(f"Glossary index creation failed with exit code {result.returncode}")
@@ -142,7 +142,7 @@ class IndexStartupUpdater:
             
             if result.returncode == 0:
                 logger.info("Endpoint index creation completed successfully")
-                logger.debug(f"Script output: {result.stdout}")
+                logger.info(f"Script output: {result.stdout}")
                 return True
             else:
                 logger.error(f"Endpoint index creation failed with exit code {result.returncode}")

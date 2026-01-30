@@ -26,5 +26,10 @@ def fetch_obp_data(url: str) -> Dict[str, Any]:
     """Fetch data from OBP API endpoint."""
     print(f"Fetching data from: {url}")
     response = requests.get(url, timeout=30)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP error from {url}: {e}")
+        print(f"OBP response body: {response.text}")
+        raise
     return response.json()

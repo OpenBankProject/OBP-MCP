@@ -35,6 +35,57 @@ uv sync
 
 Server starts at `http://0.0.0.0:9100`
 
+## Authentication
+
+OBP-MCP supports three authentication modes:
+
+| Mode | Use Case | `AUTH_PROVIDER` |
+|------|----------|----------------|
+| **bearer-only** | Internal agents (Opey), microservices | `bearer-only` |
+| **obp-oidc** | External MCP clients (VS Code, Claude Desktop) | `obp-oidc` |
+| **keycloak** | External MCP clients with Keycloak | `keycloak` |
+
+### For Opey (Internal Agent)
+
+Use `bearer-only` authentication. This mode:
+- **Does NOT** expose OAuth discovery endpoints
+- Simply validates JWT tokens against OBP-OIDC's JWKS
+- Is designed for architectures where OAuth is handled externally (e.g., by a frontend portal)
+
+```bash
+# .env
+ENABLE_OAUTH="true"
+AUTH_PROVIDER=bearer-only
+OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
+```
+
+Your agent passes the user's access token with each MCP request:
+```
+Authorization: Bearer <user_access_token>
+```
+
+### For External MCP Clients (VS Code, Claude Desktop, MCP Inspector)
+
+Use `obp-oidc` or `keycloak` authentication. These modes expose the full OAuth 2.1 discovery flow, allowing MCP clients to:
+- Discover authorization endpoints via `/.well-known/oauth-protected-resource`
+- Perform Dynamic Client Registration (RFC 7591)
+- Complete the OAuth authorization code flow with PKCE
+
+```bash
+# .env
+ENABLE_OAUTH="true"
+AUTH_PROVIDER=obp-oidc
+OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
+BASE_URL=http://localhost:9100
+```
+
+### Disabling Authentication
+
+For development or testing without authentication:
+```bash
+ENABLE_OAUTH="false"
+```
+
 ## Testing with MCP Inspector
 
 Run the server normally then start the inspector with:

@@ -105,24 +105,45 @@ class SecurityRequirement(BaseModel):
     }
 
 
+class RoleRequirement(BaseModel):
+    """
+    OBP Role requirement for an endpoint.
+    
+    Represents a required role/entitlement to access the endpoint.
+    """
+    role: str = Field(..., description="The role/entitlement name")
+    requires_bank_id: bool = Field(default=False, description="Whether this role requires a bank_id context")
+    
+    model_config = {
+        "extra": "ignore",
+    }
+
+
 class EndpointSchema(BaseModel):
     """
-    Full OpenAPI schema for an endpoint.
+    Full schema for an endpoint.
     
     Contains complete specification including parameters, request body,
-    responses, and security requirements.
+    responses, security requirements, and roles from OBP resource docs.
     """
     path: str = Field(..., description="API path template")
     method: HttpMethod = Field(..., description="HTTP method")
     operation_id: str = Field(default="", description="OpenAPI operationId")
     summary: str = Field(default="", description="Brief description")
     description: str = Field(default="", description="Detailed description (may contain HTML)")
+    description_markdown: str = Field(default="", description="Description in markdown format")
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
     parameters: List[EndpointParameter] = Field(default_factory=list, description="Endpoint parameters")
     requestBody: Optional[Dict[str, Any]] = Field(default=None, description="Request body specification")
     responses: Dict[str, EndpointResponse] = Field(default_factory=dict, description="Response specifications by status code")
+    success_response_body: Optional[Dict[str, Any]] = Field(default=None, description="Example success response body")
+    error_response_bodies: List[str] = Field(default_factory=list, description="Possible error response messages")
+    typed_success_response_body: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for success response")
     security: List[Dict[str, Any]] = Field(default_factory=list, description="Security requirements")
-    roles: List[str] = Field(default_factory=list, description="Required roles")
+    roles: List[RoleRequirement] = Field(default_factory=list, description="Required roles/entitlements")
+    is_featured: bool = Field(default=False, description="Whether this endpoint is featured")
+    special_instructions: str = Field(default="", description="Special instructions for using this endpoint")
+    connector_methods: List[str] = Field(default_factory=list, description="Related connector methods")
     
     model_config = {
         "extra": "ignore",
@@ -150,18 +171,33 @@ class EndpointSchema(BaseModel):
             if isinstance(param_data, dict):
                 parameters.append(EndpointParameter(**param_data))
         
+        # Convert roles to RoleRequirement models
+        roles = []
+        for role_data in data.get("roles", []):
+            if isinstance(role_data, dict):
+                roles.append(RoleRequirement(**role_data))
+            elif isinstance(role_data, str):
+                roles.append(RoleRequirement(role=role_data))
+        
         return cls(
             path=data.get("path", ""),
             method=HttpMethod(data.get("method", "GET").upper()),
             operation_id=data.get("operation_id", ""),
             summary=data.get("summary", ""),
             description=data.get("description", ""),
+            description_markdown=data.get("description_markdown", ""),
             tags=data.get("tags", []),
             parameters=parameters,
             requestBody=data.get("requestBody"),
             responses=responses,
+            success_response_body=data.get("success_response_body"),
+            error_response_bodies=data.get("error_response_bodies", []),
+            typed_success_response_body=data.get("typed_success_response_body"),
             security=data.get("security", []),
-            roles=data.get("roles", []),
+            roles=roles,
+            is_featured=data.get("is_featured", False),
+            special_instructions=data.get("special_instructions", ""),
+            connector_methods=data.get("connector_methods", []),
         )
 
 
@@ -323,6 +359,88 @@ class EndpointIndex:
                     "security": details.get("security", []),
                     "roles": details.get("roles", [])
                 }
+        
+        logger.info(f"Built index with {len(self._index)} endpoints")
+        logger.info(f"Built schemas for {len(self._schemas)} endpoints")
+        self._save_index()
+        self._save_schemas()
+        self._schemas_loaded = True
+    
+    def build_index_from_resource_docs(self, resource_docs_data: Dict[str, Any]) -> None:
+        """
+        Build the lightweight endpoint index and full schemas from OBP resource docs.
+        
+        Resource docs provide richer information than swagger, including:
+        - Roles/entitlements required for each endpoint
+        - Markdown descriptions
+        - Example success/error response bodies
+        - Typed response schemas
+        - Connector methods
+        
+        Args:
+            resource_docs_data: Resource docs response from OBP API
+        """
+        self._index = {}
+        self._schemas = {}
+        self._index_models = {}
+        self._schema_models = {}
+        
+        resource_docs = resource_docs_data.get("resource_docs", [])
+        
+        logger.info(f"Building index from {len(resource_docs)} resource docs...")
+        
+        for doc in resource_docs:
+            if not isinstance(doc, dict):
+                continue
+            
+            # Extract fields from resource doc format
+            operation_id = doc.get("operation_id", "")
+            method = doc.get("request_verb", "GET").upper()
+            path = doc.get("request_url", "")
+            summary = doc.get("summary", "")
+            tags = doc.get("tags", [])
+            
+            # Use operation_id as the endpoint ID (fallback to generated ID if not present)
+            if operation_id:
+                endpoint_id = operation_id
+            else:
+                endpoint_id = self._generate_endpoint_id(method, path)
+                logger.warning(f"No operation_id for {method} {path}, using generated ID: {endpoint_id}")
+            
+            # Store lightweight index entry
+            self._index[endpoint_id] = {
+                "id": endpoint_id,
+                "method": method,
+                "path": path,
+                "operation_id": operation_id,
+                "summary": summary,
+                "tags": tags
+            }
+            
+            # Extract roles from resource docs format
+            roles = doc.get("roles", [])
+            
+            # Store full schema separately (keyed by endpoint_id)
+            self._schemas[endpoint_id] = {
+                "path": path,
+                "method": method,
+                "operation_id": operation_id,
+                "summary": summary,
+                "description": doc.get("description", ""),
+                "description_markdown": doc.get("description_markdown", ""),
+                "tags": tags,
+                "parameters": [],  # Resource docs don't provide parameters in the same way
+                "requestBody": None,
+                "responses": {},
+                "success_response_body": doc.get("success_response_body"),
+                "error_response_bodies": doc.get("error_response_bodies", []),
+                "typed_success_response_body": doc.get("typed_success_response_body"),
+                "security": [],
+                "roles": roles,
+                "is_featured": doc.get("is_featured", False),
+                "special_instructions": doc.get("special_instructions", ""),
+                "connector_methods": doc.get("connector_methods", []),
+            }
         
         logger.info(f"Built index with {len(self._index)} endpoints")
         logger.info(f"Built schemas for {len(self._schemas)} endpoints")

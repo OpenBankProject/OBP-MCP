@@ -9,9 +9,14 @@ class ApprovalConsent:
     consent_id: str
     
     
-def get_roles(endpoint: dict[str, Any]) -> list[str]:
+def get_roles_for_endpoint(endpoint_id: str) -> list[str]:
     """
-    Gets the required entitlements for a given OBP endpoint.
+    Gets the required entitlements for a given OBP endpoint from its ID.
     """
     
+    index = get_endpoint_index()
+    endpoint = index.get_endpoint_schema(endpoint_id)
+    if not endpoint:
+        raise ValueError(f"Endpoint with ID '{endpoint_id}' not found in index.")
     
+    return endpoint.roles

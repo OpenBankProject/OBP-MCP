@@ -10,6 +10,7 @@ from src.tools.endpoint_index import (
     EndpointSchema,
     EndpointParameter,
     EndpointResponse,
+    RoleRequirement,
     HttpMethod,
     get_endpoint_index,
 )
@@ -95,6 +96,43 @@ class TestEndpointSummary:
         summary = EndpointSummary(**data)
         assert summary.id == "OBPv4.0.0-getBanks"
         assert summary.method == HttpMethod.GET
+
+
+class TestRoleRequirement:
+    """Tests for RoleRequirement Pydantic model."""
+
+    def test_create_role(self):
+        """Test creating a role requirement."""
+        role = RoleRequirement(
+            role="CanGetBanks",
+            requires_bank_id=False,
+        )
+        assert role.role == "CanGetBanks"
+        assert role.requires_bank_id is False
+
+    def test_role_with_bank_id(self):
+        """Test role that requires bank_id."""
+        role = RoleRequirement(
+            role="CanGetAccountsAtBank",
+            requires_bank_id=True,
+        )
+        assert role.role == "CanGetAccountsAtBank"
+        assert role.requires_bank_id is True
+
+    def test_role_default_bank_id(self):
+        """Test role defaults for requires_bank_id."""
+        role = RoleRequirement(role="SomeRole")
+        assert role.requires_bank_id is False
+
+    def test_role_serialization(self):
+        """Test that role serializes to JSON correctly."""
+        role = RoleRequirement(
+            role="CanCreateCustomer",
+            requires_bank_id=True,
+        )
+        data = role.model_dump()
+        assert data["role"] == "CanCreateCustomer"
+        assert data["requires_bank_id"] is True
 
 
 class TestEndpointParameter:
@@ -306,3 +344,125 @@ class TestEndpointIndex:
         assert len(tags) > 0
         # Should be sorted
         assert tags == sorted(tags)
+
+
+class TestBuildFromResourceDocs:
+    """Tests for building index from resource docs format."""
+
+    def test_build_from_resource_docs(self, tmp_path):
+        """Test building index from resource docs data."""
+        # Create a temporary index
+        index_file = tmp_path / "test_index.json"
+        schemas_file = tmp_path / "test_schemas.json"
+        
+        index = EndpointIndex(
+            index_file=str(index_file),
+            schemas_file=str(schemas_file)
+        )
+        
+        # Sample resource docs data
+        resource_docs_data = {
+            "resource_docs": [
+                {
+                    "operation_id": "OBPv6.0.0-testEndpoint",
+                    "request_verb": "GET",
+                    "request_url": "/obp/v6.0.0/test",
+                    "summary": "Test Endpoint",
+                    "description": "<p>Test description</p>",
+                    "description_markdown": "Test description",
+                    "tags": ["Test", "API"],
+                    "roles": [
+                        {"role": "CanTestEndpoint", "requires_bank_id": False}
+                    ],
+                    "success_response_body": {"status": "ok"},
+                    "error_response_bodies": ["OBP-20001: User not logged in."],
+                    "typed_success_response_body": {
+                        "type": "object",
+                        "properties": {"status": {"type": "string"}}
+                    },
+                    "is_featured": True,
+                    "special_instructions": "",
+                    "connector_methods": []
+                },
+                {
+                    "operation_id": "OBPv6.0.0-anotherEndpoint",
+                    "request_verb": "POST",
+                    "request_url": "/obp/v6.0.0/another",
+                    "summary": "Another Endpoint",
+                    "description": "Another description",
+                    "tags": ["Test"],
+                    "roles": [],
+                }
+            ]
+        }
+        
+        index.build_index_from_resource_docs(resource_docs_data)
+        
+        # Verify index was built
+        assert len(index._index) == 2
+        assert len(index._schemas) == 2
+        
+        # Verify first endpoint
+        endpoint = index.get_endpoint_by_id("OBPv6.0.0-testEndpoint")
+        assert endpoint is not None
+        assert endpoint.method == "GET"
+        assert endpoint.path == "/obp/v6.0.0/test"
+        assert "Test" in endpoint.tags
+        
+        # Verify schema with roles
+        schema = index.get_endpoint_schema("OBPv6.0.0-testEndpoint")
+        assert schema is not None
+        assert len(schema.roles) == 1
+        assert schema.roles[0].role == "CanTestEndpoint"
+        assert schema.roles[0].requires_bank_id is False
+        assert schema.is_featured is True
+        assert schema.success_response_body == {"status": "ok"}
+
+    def test_build_from_resource_docs_with_no_roles(self, tmp_path):
+        """Test building index from resource docs with endpoints that have no roles."""
+        index_file = tmp_path / "test_index.json"
+        schemas_file = tmp_path / "test_schemas.json"
+        
+        index = EndpointIndex(
+            index_file=str(index_file),
+            schemas_file=str(schemas_file)
+        )
+        
+        resource_docs_data = {
+            "resource_docs": [
+                {
+                    "operation_id": "OBPv6.0.0-publicEndpoint",
+                    "request_verb": "GET",
+                    "request_url": "/obp/v6.0.0/public",
+                    "summary": "Public Endpoint",
+                    "tags": ["Public"],
+                    "roles": [],  # No roles required
+                }
+            ]
+        }
+        
+        index.build_index_from_resource_docs(resource_docs_data)
+        
+        schema = index.get_endpoint_schema("OBPv6.0.0-publicEndpoint")
+        assert schema is not None
+        assert len(schema.roles) == 0
+
+    def test_schema_from_raw_with_roles(self):
+        """Test creating EndpointSchema from raw data with roles."""
+        raw_data = {
+            "path": "/test",
+            "method": "GET",
+            "operation_id": "test-op",
+            "summary": "Test",
+            "roles": [
+                {"role": "CanDoThing", "requires_bank_id": True},
+                {"role": "CanDoOtherThing", "requires_bank_id": False},
+            ]
+        }
+        
+        schema = EndpointSchema.from_raw(raw_data)
+        assert len(schema.roles) == 2
+        assert schema.roles[0].role == "CanDoThing"
+        assert schema.roles[0].requires_bank_id is True
+        assert schema.roles[1].role == "CanDoOtherThing"
+        assert schema.roles[1].requires_bank_id is False

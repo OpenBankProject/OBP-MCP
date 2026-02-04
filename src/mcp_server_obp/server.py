@@ -83,9 +83,10 @@ def list_endpoints_by_tag(tags: List[str]) -> str:
                 "total_endpoints": len(index._index)
             }, indent=2)
         
+        # Serialize Pydantic models to dictionaries
         return json.dumps({
             "count": len(endpoints),
-            "endpoints": endpoints
+            "endpoints": [ep.model_dump() for ep in endpoints]
         }, indent=2)
         
     except Exception as e:
@@ -132,7 +133,8 @@ def get_endpoint_schema(endpoint_id: str) -> str:
                 "suggestion": "Use list_endpoints_by_tag() to find available endpoints"
             }, indent=2)
         
-        return json.dumps(schema, indent=2)
+        # Serialize Pydantic model to dictionary
+        return json.dumps(schema.model_dump(by_alias=True), indent=2)
         
     except Exception as e:
         logger.error(f"Error getting endpoint schema: {e}")
@@ -188,7 +190,7 @@ def call_obp_api(
             }, indent=2)
         
         # Construct the path with parameters
-        path = endpoint["path"]
+        path = endpoint.path
         if path_params:
             for key, value in path_params.items():
                 path = path.replace(f"{{{key}}}", str(value))
@@ -200,7 +202,7 @@ def call_obp_api(
         url = f"{base_url}{path}"
         
         # Prepare request
-        method = endpoint["method"].upper()
+        method = endpoint.method.value  # HttpMethod enum value
         request_headers = headers or {}
         
         # Make the request

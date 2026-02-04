@@ -9,7 +9,7 @@ class ApprovalConsent:
     consent_id: str
     
     
-def get_required_entitlements(endpoint: dict[str, Any]) -> list[str]:
+def get_roles(endpoint: dict[str, Any]) -> list[str]:
     """
     Gets the required entitlements for a given OBP endpoint.
     """

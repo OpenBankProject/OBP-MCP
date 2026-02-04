@@ -94,6 +94,8 @@ For development or testing without authentication:
 ENABLE_OAUTH="false"
 ```
 
+for more information about auth and how to configure your OIDC providers see the [docs](docs/AUTH_SETUP.md).
+
 ## Testing with MCP Inspector
 
 Run the server normally then start the inspector with:

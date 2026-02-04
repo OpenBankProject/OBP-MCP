@@ -142,10 +142,10 @@ def get_endpoint_schema(endpoint_id: str) -> str:
 @mcp.tool()
 def call_obp_api(
     endpoint_id: str,
-    path_params: dict = None,
-    query_params: dict = None,
-    body: dict = None,
-    headers: dict = None
+    path_params: dict = {},
+    query_params: dict = {},
+    body: dict = {},
+    headers: dict = {}
 ) -> str:
     """
     Execute an OBP API request to a specific endpoint.

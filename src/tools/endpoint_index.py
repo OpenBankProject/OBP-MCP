@@ -161,6 +161,7 @@ class EndpointIndex:
                     "requestBody": details.get("requestBody"),
                     "responses": details.get("responses", {}),
                     "security": details.get("security", []),
+                    "roles": details.get("roles", [])
                 }
         
         logger.info(f"Built index with {len(self._index)} endpoints")

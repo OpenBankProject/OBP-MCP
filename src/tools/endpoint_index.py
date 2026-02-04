@@ -246,14 +246,36 @@ class EndpointIndex:
     def get_endpoint_by_id(self, endpoint_id: str) -> Optional[Dict[str, Any]]:
         """
         Get endpoint summary by ID.
-        
+
         Args:
             endpoint_id: The unique identifier of the endpoint
-            
+
         Returns:
             Endpoint summary or None if not found
         """
         return self._index.get(endpoint_id)
+
+    def reload(self) -> None:
+        """
+        Reload the endpoint index and schemas from disk.
+
+        This clears the in-memory cache and reloads fresh data from the JSON files.
+        Useful after the index files have been regenerated.
+        """
+        logger.info("Reloading endpoint index from disk...")
+
+        # Reset the schemas loaded flag so schemas will be reloaded on next access
+        self._schemas_loaded = False
+        self._schemas = {}
+
+        # Reload the index
+        if self.index_file.exists():
+            self._load_index()
+        else:
+            logger.warning(f"Index file not found during reload: {self.index_file}")
+            self._index = {}
+
+        logger.info(f"Endpoint index reloaded with {len(self._index)} endpoints")
 
 
 # Global instance for easy access
@@ -263,13 +285,29 @@ _endpoint_index: Optional[EndpointIndex] = None
 def get_endpoint_index() -> EndpointIndex:
     """
     Get the global endpoint index instance (lazy initialization).
-    
+
     Returns:
         EndpointIndex instance
     """
     global _endpoint_index
-    
+
     if _endpoint_index is None:
         _endpoint_index = EndpointIndex()
-    
+
     return _endpoint_index
+
+
+def reload_endpoint_index() -> None:
+    """
+    Reload the global endpoint index from disk.
+
+    This should be called after the index JSON files have been regenerated
+    to ensure the in-memory cache reflects the latest data.
+    """
+    global _endpoint_index
+
+    if _endpoint_index is not None:
+        _endpoint_index.reload()
+    else:
+        # If not yet initialized, the next call to get_endpoint_index() will load fresh data
+        logger.info("Endpoint index not yet initialized, will load fresh on first access")

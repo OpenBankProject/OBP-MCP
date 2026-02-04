@@ -167,6 +167,24 @@ class GlossaryIndex:
         """Return the number of terms in the index."""
         return len(self._index)
 
+    def reload(self) -> None:
+        """
+        Reload the glossary index from disk.
+
+        This clears the in-memory cache and reloads fresh data from the JSON file.
+        Useful after the index file has been regenerated.
+        """
+        logger.info("Reloading glossary index from disk...")
+
+        # Reload the index
+        if self.index_file.exists():
+            self._load_index()
+        else:
+            logger.warning(f"Index file not found during reload: {self.index_file}")
+            self._index = {}
+
+        logger.info(f"Glossary index reloaded with {len(self._index)} terms")
+
 
 # Global instance for easy access
 _glossary_index: Optional[GlossaryIndex] = None
@@ -175,7 +193,7 @@ _glossary_index: Optional[GlossaryIndex] = None
 def get_glossary_index() -> GlossaryIndex:
     """
     Get or create the global glossary index instance.
-    
+
     Returns:
         The global GlossaryIndex instance
     """
@@ -183,3 +201,19 @@ def get_glossary_index() -> GlossaryIndex:
     if _glossary_index is None:
         _glossary_index = GlossaryIndex()
     return _glossary_index
+
+
+def reload_glossary_index() -> None:
+    """
+    Reload the global glossary index from disk.
+
+    This should be called after the index JSON file has been regenerated
+    to ensure the in-memory cache reflects the latest data.
+    """
+    global _glossary_index
+
+    if _glossary_index is not None:
+        _glossary_index.reload()
+    else:
+        # If not yet initialized, the next call to get_glossary_index() will load fresh data
+        logger.info("Glossary index not yet initialized, will load fresh on first access")

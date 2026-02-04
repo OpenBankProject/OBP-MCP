@@ -14,6 +14,10 @@ from pathlib import Path
 
 from .data_hash_manager import DataHashManager
 
+# Import reload functions for refreshing in-memory caches after file updates
+from src.tools.endpoint_index import reload_endpoint_index
+from src.tools.glossary_index import reload_glossary_index
+
 logger = logging.getLogger(__name__)
 
 
@@ -185,11 +189,17 @@ class IndexStartupUpdater:
             
             # Run the populate script
             success = self.run_populate_scripts()
-            
+
             if success:
                 # Update stored hashes
                 self.hash_manager.update_stored_hashes(self.endpoint_type)
-                logger.info("✓ Database update completed and hashes updated")
+
+                # Reload the in-memory caches to reflect the new data
+                logger.info("Reloading in-memory index caches...")
+                reload_endpoint_index()
+                reload_glossary_index()
+
+                logger.info("✓ Database update completed, hashes updated, and caches reloaded")
                 return True
             else:
                 logger.error("✗ Database update failed")

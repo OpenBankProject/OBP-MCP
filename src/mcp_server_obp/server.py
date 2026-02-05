@@ -24,14 +24,16 @@ if str(_src_dir) not in sys.path:
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 from fastmcp.server.dependencies import get_access_token
+from fastmcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
 
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
+from mcp_server_obp.elicitation import elicit_consent, ApprovalConsent
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,8 @@ logger = logging.getLogger(__name__)
 # Supports: keycloak, obp-oidc, or none (disabled)
 # See auth.py for configuration details
 auth = get_auth_provider()
-    
+
+
 
 mcp = FastMCP(
     "Open Bank Project",
@@ -142,12 +145,13 @@ def get_endpoint_schema(endpoint_id: str) -> str:
 
 
 @mcp.tool()
-def call_obp_api(
+async def call_obp_api(
+    ctx: Context,
     endpoint_id: str,
     path_params: dict = None,
     query_params: dict = None,
     body: dict = None,
-    headers: dict = None
+    headers: dict = None,
 ) -> str:
     """
     Execute an OBP API request to a specific endpoint.
@@ -173,7 +177,7 @@ def call_obp_api(
         index = get_endpoint_index()
         
         # Get endpoint info from lightweight index
-        endpoint = index.get_endpoint_by_id(endpoint_id)
+        endpoint = index.get_endpoint_schema(endpoint_id)
         if not endpoint:
             return json.dumps({
                 "error": f"Endpoint '{endpoint_id}' not found",
@@ -205,6 +209,47 @@ def call_obp_api(
         method = endpoint.method.value  # HttpMethod enum value
         request_headers = headers or {}
         
+        auth_method = os.getenv("OBP_AUTHORIZATION_VIA", "none").lower()
+        match auth_method:
+            case "oauth":
+                logger.info("Using OAuth authorization method for OBP API call")
+                access_token = get_access_token()
+                if not access_token:
+                    logger.error("No access token available in context for OAuth authorization.")
+                else:
+                    # TODO: Elicit a simple approval here to confirm tool use?
+                    request_headers["Authorization"] = f"Bearer {access_token}"
+            case "consent":
+                # Elicit user consent
+                logger.info("Eliciting user consent for OBP API call")
+                from mcp_server_obp.elicitation import elicit_consent
+                
+                response = await elicit_consent(ctx, endpoint)
+                match response:
+                    case AcceptedElicitation(data=consent):
+                        # For now just assume the consent is valid, but we might want to decode the JWT in the future
+                        logger.info("User consent accepted for OBP API call")
+                        request_headers["Consent-JWT"] = consent.consent_jwt
+                    case DeclinedElicitation():
+                        logger.info("User declined consent for OBP API call")
+                        return json.dumps({
+                            "error": "User declined consent for this endpoint"
+                        }, indent=2)
+                    case CancelledElicitation():
+                        logger.info("User cancelled consent elicitation for OBP API call")
+                        return json.dumps({
+                            "error": "User cancelled operation."
+                        }, indent=2)
+            case "none":
+                # No authorization
+                logger.info("No authorization method used for OBP API call")
+                pass
+            case _:
+                logger.error(f"Invalid OBP_AUTHORIZATION_VIA value: {auth_method}")
+                return json.dumps({
+                    "error": f"Internal server error."
+                }, indent=2)
+                
         # Make the request
         logger.info(f"Calling OBP API: {method} {url}")
         

@@ -54,6 +54,43 @@ mcp = FastMCP(
 # ============================================================================
 
 @mcp.tool()
+def list_all_endpoint_tags() -> str:
+    """
+    Get all available OBP API endpoint tags.
+    
+    Use this to discover what tags are available before calling list_endpoints_by_tag().
+    Tags represent different categories of endpoints (e.g., "Account", "Transaction", "Customer").
+    
+    Returns:
+        JSON string with all available tags and their endpoint counts
+    
+    Example:
+        list_all_endpoint_tags() -> Returns all available tags with counts
+    """
+    try:
+        index = get_endpoint_index()
+        tags = index.get_all_tags()
+        
+        # Count endpoints per tag
+        tag_counts = {}
+        for tag in tags:
+            endpoints = index.list_endpoints_by_tag([tag])
+            tag_counts[tag] = len(endpoints)
+        
+        # Sort by count descending
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+        
+        return json.dumps({
+            "total_tags": len(tags),
+            "tags": [{"tag": tag, "endpoint_count": count} for tag, count in sorted_tags]
+        }, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Error listing endpoint tags: {e}")
+        return json.dumps({"error": str(e)}, indent=2)
+
+
+@mcp.tool()
 def list_endpoints_by_tag(tags: List[str]) -> str:
     """
     Get available OBP API endpoints for given tags. Returns lightweight summaries (no full schemas).

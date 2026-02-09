@@ -26,14 +26,12 @@ if str(_project_root) not in sys.path:
 
 from fastmcp import FastMCP, Context
 from fastmcp.server.dependencies import get_access_token
-from fastmcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
 
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
-from mcp_server_obp.elicitation import elicit_consent, ApprovalConsent
 
 logger = logging.getLogger(__name__)
 
@@ -220,26 +218,19 @@ async def call_obp_api(
                     # TODO: Elicit a simple approval here to confirm tool use?
                     request_headers["Authorization"] = f"Bearer {access_token}"
             case "consent":
-                # Elicit user consent
-                logger.info("Eliciting user consent for OBP API call")
-                from mcp_server_obp.elicitation import elicit_consent
-                
-                response = await elicit_consent(ctx, endpoint)
-                match response:
-                    case AcceptedElicitation(data=consent):
-                        # For now just assume the consent is valid, but we might want to decode the JWT in the future
-                        logger.info("User consent accepted for OBP API call")
-                        request_headers["Consent-JWT"] = consent.consent_jwt
-                    case DeclinedElicitation():
-                        logger.info("User declined consent for OBP API call")
-                        return json.dumps({
-                            "error": "User declined consent for this endpoint"
-                        }, indent=2)
-                    case CancelledElicitation():
-                        logger.info("User cancelled consent elicitation for OBP API call")
-                        return json.dumps({
-                            "error": "User cancelled operation."
-                        }, indent=2)
+                consent_jwt = (headers or {}).get("Consent-JWT")
+                if not consent_jwt:
+                    return json.dumps({
+                        "error": "consent_required",
+                        "endpoint_id": endpoint_id,
+                        "operation_id": endpoint.operation_id,
+                        "method": endpoint.method.value,
+                        "path": endpoint.path,
+                        "required_roles": [role.model_dump() for role in endpoint.roles],
+                        "message": f"User consent is required to call {endpoint.operation_id}. "
+                                   f"Please approve and provide a Consent-JWT.",
+                    }, indent=2)
+                request_headers["Consent-JWT"] = consent_jwt
             case "none":
                 # No authorization
                 logger.info("No authorization method used for OBP API call")

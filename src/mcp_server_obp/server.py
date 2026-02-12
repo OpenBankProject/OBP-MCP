@@ -10,11 +10,14 @@ from dotenv import load_dotenv
 # Load environment variables from .env file before anything else
 load_dotenv()
 
-# Configure logging
+# Configure logging (allow override via LOG_LEVEL env)
+_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, _log_level, logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
+# Ensure our package logger honors the chosen level (basicConfig locks in handlers)
+logging.getLogger("mcp_server_obp").setLevel(getattr(logging, _log_level, logging.INFO))
 
 # Add the src and project root directories to the Python path when running as a script
 _src_dir = Path(__file__).parent.parent
@@ -204,7 +207,7 @@ async def call_obp_api(
         url = f"{base_url}{path}"
         
         # Prepare request
-        method = endpoint.method.value  # HttpMethod enum value
+        method = endpoint.method  # HttpMethod enum value
         request_headers = headers or {}
         
         auth_method = os.getenv("OBP_AUTHORIZATION_VIA", "none").lower()
@@ -224,7 +227,7 @@ async def call_obp_api(
                         "error": "consent_required",
                         "endpoint_id": endpoint_id,
                         "operation_id": endpoint.operation_id,
-                        "method": endpoint.method.value,
+                        "method": endpoint.method,
                         "path": endpoint.path,
                         "required_roles": [role.model_dump() for role in endpoint.roles],
                         "message": f"User consent is required to call {endpoint.operation_id}. "
@@ -263,8 +266,12 @@ async def call_obp_api(
         
         try:
             result["response"] = response.json()
+            logging.info(f"OBP API call successful: {method} {url} - Status: {response.status_code}")
+            logging.info(f"Response: {json.dumps(result['response'], indent=2)[:500]}...")  # Log first 500 chars of response
         except:
             result["response"] = response.text
+            logging.info(f"OBP API call with non-JSON response: {method} {url} - Status: {response.status_code}")
+            logging.info(f"Response: {result['response'][:500]}...")  # Log first 500 chars of response
         
         return json.dumps(result, indent=2)
         

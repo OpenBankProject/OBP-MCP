@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -6,6 +7,53 @@ from typing import AsyncIterator, Any
 from database.startup_updater import update_index_on_startup
 
 logger = logging.getLogger(__name__)
+
+
+def print_client_configs():
+    """Print copy-pasteable MCP client configuration snippets."""
+    host = os.getenv("FASTMCP_HOST", "127.0.0.1")
+    port = os.getenv("FASTMCP_PORT", "9100")
+    auth_provider = os.getenv("AUTH_PROVIDER", "none")
+    requires_auth = auth_provider != "none"
+    base_url = f"http://{host}:{port}/mcp"
+
+    configs = {
+        "Opey": {
+            "servers": [
+                {
+                    "name": "obp",
+                    "url": base_url,
+                    "transport": "http",
+                    "requires_auth": requires_auth,
+                }
+            ]
+        },
+        "Claude Desktop / claude_desktop_config.json": {
+            "mcpServers": {
+                "obp": {
+                    "url": base_url,
+                }
+            }
+        },
+        "VS Code / settings.json": {
+            "mcp": {
+                "servers": {
+                    "obp": {
+                        "url": base_url,
+                    }
+                }
+            }
+        },
+    }
+
+    separator = "=" * 60
+    print(f"\n{separator}")
+    print("MCP Client Configurations")
+    print(separator)
+    for name, config in configs.items():
+        print(f"\n--- {name} ---\n")
+        print(json.dumps(config, indent=2))
+    print(f"\n{separator}\n")
 
 
 async def periodic_index_refresh(interval_minutes: int):
@@ -42,7 +90,8 @@ async def lifespan(server) -> AsyncIterator[dict[str, Any]]:
     """
     # Startup actions
     logger.info("Starting MCP server...")
-    
+    print_client_configs()
+
     # Check and update index on startup
     success = await update_index_on_startup()
     if not success:

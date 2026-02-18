@@ -235,7 +235,10 @@ async def call_obp_api(
         path = endpoint.path
         if path_params:
             for key, value in path_params.items():
+                # OBP index stores path params as bare names (e.g. USER_ID),
+                # but OpenAPI standard uses {USER_ID}. Handle both.
                 path = path.replace(f"{{{key}}}", str(value))
+                path = path.replace(key, str(value))
         
         # Replace VERSION placeholder
         path = path.replace("VERSION", api_version)

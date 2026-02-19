@@ -263,6 +263,7 @@ async def call_obp_api(
             case "consent":
                 consent_jwt = (headers or {}).get("Consent-JWT")
                 if not consent_jwt:
+                    bank_id = (path_params or {}).get("BANK_ID") or (path_params or {}).get("bank_id")
                     return json.dumps({
                         "error": "consent_required",
                         "endpoint_id": endpoint_id,
@@ -270,6 +271,7 @@ async def call_obp_api(
                         "method": endpoint.method,
                         "path": endpoint.path,
                         "required_roles": [role.model_dump() for role in endpoint.roles],
+                        "bank_id": bank_id,
                         "message": f"User consent is required to call {endpoint.operation_id}. "
                                    f"Please approve and provide a Consent-JWT.",
                     }, indent=2)

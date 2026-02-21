@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  obp-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: obp-mcp-server
+    ports:
+      - "${FASTMCP_PORT:-9100}:9100"
+    environment:
+      # Server Configuration
+      FASTMCP_HOST: 0.0.0.0
+      FASTMCP_PORT: 9100
+
+      # OBP API Configuration
+      OBP_BASE_URL: ${OBP_BASE_URL:-https://apisandbox.openbankproject.com}
+      OBP_API_VERSION: ${OBP_API_VERSION:-v5.1.0}
+
+      # Authentication Configuration (optional)
+      ENABLE_OAUTH: ${ENABLE_OAUTH:-false}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-bearer-only}
+      OBP_OIDC_ISSUER_URL: ${OBP_OIDC_ISSUER_URL:-}
+      BASE_URL: ${BASE_URL:-http://localhost:9100}
+
+      # Python Configuration
+      PYTHONUNBUFFERED: 1
+    volumes:
+      # Mount database/data for persistent storage of generated indexes
+      - ./database/data:/app/database/data
+
+      # Optional: Mount .env file if you prefer file-based config
+      # - ./.env:/app/.env:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - obp-network
+
+networks:
+  obp-network:
+    driver: bridge

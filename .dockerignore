@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+ai_env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Documentation
+*.md
+docs/
+!README.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Database data (generated at runtime)
+database/data/
+
+# Logs
+*.log
+
+# Other
+*.bak
+*.tmp
+.cache/
+tests/
+
+# Lock files (keeping poetry.lock for reference but using uv.lock)
+poetry.lock
+
+# License files (optional to exclude)
+LICENSE

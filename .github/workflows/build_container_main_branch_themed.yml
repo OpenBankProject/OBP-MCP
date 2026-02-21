@@ -1,0 +1,38 @@
+name: Build and publish container
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_HUB_ORGANIZATION: ${{ vars.DOCKER_HUB_ORGANIZATION }}
+  DOCKER_HUB_REPOSITORY: obp-mcp
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Docker image
+        run: |
+          echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin docker.io
+          docker build . --file Dockerfile --tag docker.io/${{ env.DOCKER_HUB_ORGANIZATION }}/${{ env.DOCKER_HUB_REPOSITORY }}:main --tag docker.io/${{ env.DOCKER_HUB_ORGANIZATION }}/${{ env.DOCKER_HUB_REPOSITORY }}:latest
+          docker push docker.io/${{ env.DOCKER_HUB_ORGANIZATION }}/${{ env.DOCKER_HUB_REPOSITORY }} --all-tags
+          echo docker done
+
+      - uses: sigstore/cosign-installer@main
+
+      - name: Write signing key to disk (only needed for `cosign sign --key`)
+        run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+
+      - name: Sign container image
+        run: |
+          cosign sign -y --key cosign.key \
+            docker.io/${{ env.DOCKER_HUB_ORGANIZATION }}/${{ env.DOCKER_HUB_REPOSITORY }}:main
+        env:
+          COSIGN_PASSWORD: "${{secrets.COSIGN_PASSWORD}}"
+
+
+

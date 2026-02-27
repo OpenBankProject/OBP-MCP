@@ -264,13 +264,31 @@ async def call_obp_api(
                 consent_jwt = (headers or {}).get("Consent-JWT")
                 if not consent_jwt:
                     bank_id = (path_params or {}).get("BANK_ID") or (path_params or {}).get("bank_id")
+
+                    # Start with the endpoint's own required roles
+                    required_roles = [role.model_dump() for role in endpoint.roles]
+
+                    # Merge roles from request body entitlements (e.g., for consent-creation
+                    # endpoints where the body specifies roles to grant). Without this, the
+                    # consent elicited for the endpoint would lack the roles needed to
+                    # actually perform the action (chicken-and-egg problem).
+                    if body and isinstance(body, dict):
+                        for entitlement in body.get("entitlements", []):
+                            if isinstance(entitlement, dict) and "role_name" in entitlement:
+                                body_role = {
+                                    "role": entitlement["role_name"],
+                                    "requires_bank_id": bool(entitlement.get("bank_id"))
+                                }
+                                if body_role not in required_roles:
+                                    required_roles.append(body_role)
+
                     return json.dumps({
                         "error": "consent_required",
                         "endpoint_id": endpoint_id,
                         "operation_id": endpoint.operation_id,
                         "method": endpoint.method,
                         "path": endpoint.path,
-                        "required_roles": [role.model_dump() for role in endpoint.roles],
+                        "required_roles": required_roles,
                         "bank_id": bank_id,
                         "message": f"User consent is required to call {endpoint.operation_id}. "
                                    f"Please approve and provide a Consent-JWT.",

@@ -10,11 +10,14 @@ from dotenv import load_dotenv
 # Load environment variables from .env file before anything else
 load_dotenv()
 
-# Configure logging
+# Configure logging (allow override via LOG_LEVEL env)
+_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, _log_level, logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
+# Ensure our package logger honors the chosen level (basicConfig locks in handlers)
+logging.getLogger("mcp_server_obp").setLevel(getattr(logging, _log_level, logging.INFO))
 
 # Add the src and project root directories to the Python path when running as a script
 _src_dir = Path(__file__).parent.parent
@@ -24,7 +27,7 @@ if str(_src_dir) not in sys.path:
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 from fastmcp.server.dependencies import get_access_token
 
 from src.tools.endpoint_index import get_endpoint_index
@@ -39,7 +42,8 @@ logger = logging.getLogger(__name__)
 # Supports: keycloak, obp-oidc, or none (disabled)
 # See auth.py for configuration details
 auth = get_auth_provider()
-    
+
+
 
 mcp = FastMCP(
     "Open Bank Project",
@@ -120,9 +124,10 @@ def list_endpoints_by_tag(tags: List[str]) -> str:
                 "total_endpoints": len(index._index)
             }, indent=2)
         
+        # Serialize Pydantic models to dictionaries
         return json.dumps({
             "count": len(endpoints),
-            "endpoints": endpoints
+            "endpoints": [ep.model_dump() for ep in endpoints]
         }, indent=2)
         
     except Exception as e:
@@ -169,7 +174,8 @@ def get_endpoint_schema(endpoint_id: str) -> str:
                 "suggestion": "Use list_endpoints_by_tag() to find available endpoints"
             }, indent=2)
         
-        return json.dumps(schema, indent=2)
+        # Serialize Pydantic model to dictionary
+        return json.dumps(schema.model_dump(by_alias=True), indent=2)
         
     except Exception as e:
         logger.error(f"Error getting endpoint schema: {e}")
@@ -177,7 +183,8 @@ def get_endpoint_schema(endpoint_id: str) -> str:
 
 
 @mcp.tool()
-def call_obp_api(
+async def call_obp_api(
+    ctx: Context,
     endpoint_id: str,
     path_params: dict = {},
     query_params: dict = {},
@@ -208,7 +215,7 @@ def call_obp_api(
         index = get_endpoint_index()
         
         # Get endpoint info from lightweight index
-        endpoint = index.get_endpoint_by_id(endpoint_id)
+        endpoint = index.get_endpoint_schema(endpoint_id)
         if not endpoint:
             return json.dumps({
                 "error": f"Endpoint '{endpoint_id}' not found",
@@ -225,10 +232,13 @@ def call_obp_api(
             }, indent=2)
         
         # Construct the path with parameters
-        path = endpoint["path"]
+        path = endpoint.path
         if path_params:
             for key, value in path_params.items():
+                # OBP index stores path params as bare names (e.g. USER_ID),
+                # but OpenAPI standard uses {USER_ID}. Handle both.
                 path = path.replace(f"{{{key}}}", str(value))
+                path = path.replace(key, str(value))
         
         # Replace VERSION placeholder
         path = path.replace("VERSION", api_version)
@@ -237,9 +247,70 @@ def call_obp_api(
         url = f"{base_url}{path}"
         
         # Prepare request
-        method = endpoint["method"].upper()
+        method = endpoint.method  # HttpMethod enum value
         request_headers = headers or {}
         
+        auth_method = os.getenv("OBP_AUTHORIZATION_VIA", "none").lower()
+        match auth_method:
+            case "oauth":
+                logger.info("Using OAuth authorization method for OBP API call")
+                access_token = get_access_token()
+                if not access_token:
+                    logger.error("No access token available in context for OAuth authorization.")
+                else:
+                    # TODO: Elicit a simple approval here to confirm tool use?
+                    request_headers["Authorization"] = f"Bearer {access_token}"
+            case "consent":
+                consent_jwt = (headers or {}).get("Consent-JWT")
+                if not consent_jwt:
+                    bank_id = (path_params or {}).get("BANK_ID") or (path_params or {}).get("bank_id")
+
+                    # Start with the endpoint's own required roles
+                    required_roles = [role.model_dump() for role in endpoint.roles]
+
+                    # Merge roles from request body entitlements (e.g., for consent-creation
+                    # endpoints where the body specifies roles to grant). Without this, the
+                    # consent elicited for the endpoint would lack the roles needed to
+                    # actually perform the action (chicken-and-egg problem).
+                    if body and isinstance(body, dict):
+                        for entitlement in body.get("entitlements", []):
+                            if isinstance(entitlement, dict) and "role_name" in entitlement:
+                                body_role = {
+                                    "role": entitlement["role_name"],
+                                    "requires_bank_id": bool(entitlement.get("bank_id"))
+                                }
+                                if body_role not in required_roles:
+                                    required_roles.append(body_role)
+
+                    return json.dumps({
+                        "error": "consent_required",
+                        "endpoint_id": endpoint_id,
+                        "operation_id": endpoint.operation_id,
+                        "method": endpoint.method,
+                        "path": endpoint.path,
+                        "required_roles": required_roles,
+                        "bank_id": bank_id,
+                        "message": f"User consent is required to call {endpoint.operation_id}. "
+                                   f"Please approve and provide a Consent-JWT.",
+                    }, indent=2)
+                request_headers["Consent-JWT"] = consent_jwt
+                
+                consumer_key = os.getenv("OPEY_OBP_CONSUMER_KEY")
+                if consumer_key:
+                    request_headers["Consumer-Key"] = consumer_key
+                else:
+                    logger.warning("OPEY_OBP_CONSUMER_KEY is not set in environment variables. Consent-based authorization will fail without it.")
+                    
+            case "none":
+                # No authorization
+                logger.info("No authorization method used for OBP API call")
+                pass
+            case _:
+                logger.error(f"Invalid OBP_AUTHORIZATION_VIA value: {auth_method}")
+                return json.dumps({
+                    "error": f"Internal server error."
+                }, indent=2)
+                
         # Make the request
         logger.info(f"Calling OBP API: {method} {url}")
         
@@ -262,8 +333,12 @@ def call_obp_api(
         
         try:
             result["response"] = response.json()
+            logging.info(f"OBP API call successful: {method} {url} - Status: {response.status_code}")
+            logging.info(f"Response: {json.dumps(result['response'], indent=2)[:500]}...")  # Log first 500 chars of response
         except:
             result["response"] = response.text
+            logging.info(f"OBP API call with non-JSON response: {method} {url} - Status: {response.status_code}")
+            logging.info(f"Response: {result['response'][:500]}...")  # Log first 500 chars of response
         
         return json.dumps(result, indent=2)
         

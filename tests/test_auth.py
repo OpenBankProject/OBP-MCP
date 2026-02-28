@@ -207,6 +207,33 @@ class TestMultiIssuerJWTVerifier:
             mock_verifier1.verify_token.assert_called_once_with(token)
             mock_verifier2.verify_token.assert_called_once_with(token)
 
+    @pytest.mark.asyncio
+    async def test_verify_token_rejects_non_jwt_without_verifiers(self, keycloak_realm_url):
+        """Ensure malformed tokens fail fast without hitting any verifier."""
+        bad_token = "not-a-jwt"
+
+        with patch("src.mcp_server_obp.auth.JWTVerifier") as MockJWTVerifier:
+            mock_verifier = AsyncMock()
+            mock_verifier.verify_token = AsyncMock(return_value={"sub": "user123"})
+            MockJWTVerifier.return_value = mock_verifier
+
+            verifier = MultiIssuerJWTVerifier(
+                issuers=[
+                    IssuerConfig(
+                        issuer=keycloak_realm_url,
+                        jwks_uri=f"{keycloak_realm_url}/certs",
+                    )
+                ]
+            )
+
+            # Replace the verifier with our mock
+            verifier._verifiers[keycloak_realm_url] = mock_verifier
+
+            result = await verifier.verify_token(bad_token)
+
+            assert result is None
+            mock_verifier.verify_token.assert_not_called()
+
 
 class TestCreateBearerAuth:
     """Tests for create_bearer_auth() function."""

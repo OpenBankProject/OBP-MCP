@@ -178,8 +178,14 @@ class MultiIssuerJWTVerifier(TokenVerifier):
             AccessToken object if valid, None if invalid or expired
         """
         logger.info("🔐 Starting token verification")
-        logger.debug(f"Token (first 20 chars): {token[:20]}...")
-        logger.debug(f"Configured issuers: {list(self._verifiers.keys())}")
+        logger.info(f"Token (first 20 chars): {token[:20]}...")
+        logger.info(f"Configured issuers: {list(self._verifiers.keys())}")
+
+        # Fast-fail on clearly malformed tokens to avoid noisy verifier errors
+        token = token.strip()
+        if token.count(".") < 2:
+            logger.warning("Rejected token without JWT structure (expected header.payload.signature)")
+            return None
         
         # Extract issuer from token
         issuer = self._extract_issuer(token)

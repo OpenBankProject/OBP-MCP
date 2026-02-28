@@ -10,11 +10,195 @@ import json
 import logging
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+from enum import Enum
+
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Pydantic Models for Type Safety
+# =============================================================================
+
+
+class HttpMethod(str, Enum):
+    """HTTP methods supported by the API."""
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    DELETE = "DELETE"
+    PATCH = "PATCH"
+    HEAD = "HEAD"
+    OPTIONS = "OPTIONS"
+
+
+class EndpointSummary(BaseModel):
+    """
+    Lightweight endpoint summary for discovery and listing.
+    
+    This model contains minimal information needed for endpoint discovery
+    without the full OpenAPI schema details.
+    """
+    id: str = Field(..., description="Unique identifier for the endpoint")
+    method: HttpMethod = Field(..., description="HTTP method")
+    path: str = Field(..., description="API path template")
+    operation_id: str = Field(default="", description="OpenAPI operationId")
+    summary: str = Field(default="", description="Brief description of the endpoint")
+    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    
+    model_config = {
+        "frozen": False,
+        "extra": "ignore",
+        "use_enum_values": True,  # Serialize enums as their values
+    }
+
+
+class EndpointParameter(BaseModel):
+    """
+    OpenAPI parameter definition.
+    
+    Represents a single parameter for an API endpoint (path, query, header, etc.).
+    """
+    name: str = Field(..., description="Parameter name")
+    in_: str = Field(..., alias="in", description="Parameter location (path, query, header, body)")
+    description: str = Field(default="", description="Parameter description")
+    required: bool = Field(default=False, description="Whether the parameter is required")
+    schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema", description="JSON Schema for the parameter")
+    type: Optional[str] = Field(default=None, description="Parameter type (for simple types)")
+    
+    model_config = {
+        "populate_by_name": True,
+        "extra": "allow",  # Allow extra fields from OpenAPI spec
+    }
+
+
+class EndpointResponse(BaseModel):
+    """
+    OpenAPI response definition.
+    
+    Represents a single response type for an API endpoint.
+    """
+    description: str = Field(default="", description="Response description")
+    schema_: Optional[Dict[str, Any]] = Field(default=None, alias="schema", description="JSON Schema for the response body")
+    
+    model_config = {
+        "populate_by_name": True,
+        "extra": "allow",
+    }
+
+
+class SecurityRequirement(BaseModel):
+    """
+    OpenAPI security requirement.
+    
+    Represents authentication/authorization requirements for an endpoint.
+    """
+    directLogin: Optional[List[str]] = Field(default=None)
+    gatewayLogin: Optional[List[str]] = Field(default=None)
+    
+    model_config = {
+        "extra": "allow",
+    }
+
+
+class RoleRequirement(BaseModel):
+    """
+    OBP Role requirement for an endpoint.
+    
+    Represents a required role/entitlement to access the endpoint.
+    """
+    role: str = Field(..., description="The role/entitlement name")
+    requires_bank_id: bool = Field(default=False, description="Whether this role requires a bank_id context")
+    
+    model_config = {
+        "extra": "ignore",
+    }
+
+
+class EndpointSchema(BaseModel):
+    """
+    Full schema for an endpoint.
+    
+    Contains complete specification including parameters, request body,
+    responses, security requirements, and roles from OBP resource docs.
+    """
+    path: str = Field(..., description="API path template")
+    method: HttpMethod = Field(..., description="HTTP method")
+    operation_id: str = Field(default="", description="OpenAPI operationId")
+    summary: str = Field(default="", description="Brief description")
+    description: str = Field(default="", description="Detailed description (may contain HTML)")
+    description_markdown: str = Field(default="", description="Description in markdown format")
+    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    parameters: List[EndpointParameter] = Field(default_factory=list, description="Endpoint parameters")
+    requestBody: Optional[Dict[str, Any]] = Field(default=None, description="Request body specification")
+    responses: Dict[str, EndpointResponse] = Field(default_factory=dict, description="Response specifications by status code")
+    success_response_body: Optional[Dict[str, Any]] = Field(default=None, description="Example success response body")
+    error_response_bodies: List[str] = Field(default_factory=list, description="Possible error response messages")
+    typed_success_response_body: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for success response")
+    security: List[Dict[str, Any]] = Field(default_factory=list, description="Security requirements")
+    roles: List[RoleRequirement] = Field(default_factory=list, description="Required roles/entitlements")
+    is_featured: bool = Field(default=False, description="Whether this endpoint is featured")
+    special_instructions: str = Field(default="", description="Special instructions for using this endpoint")
+    connector_methods: List[str] = Field(default_factory=list, description="Related connector methods")
+    
+    model_config = {
+        "extra": "ignore",
+        "use_enum_values": True,  # Serialize enums as their values
+    }
+    
+    @classmethod
+    def from_raw(cls, data: Dict[str, Any]) -> "EndpointSchema":
+        """
+        Create an EndpointSchema from raw dictionary data.
+        
+        Handles the conversion of nested structures and provides sensible defaults.
+        """
+        # Convert responses dict to use EndpointResponse models
+        responses = {}
+        for status_code, response_data in data.get("responses", {}).items():
+            if isinstance(response_data, dict):
+                responses[status_code] = EndpointResponse(**response_data)
+            else:
+                responses[status_code] = EndpointResponse(description=str(response_data))
+        
+        # Convert parameters to EndpointParameter models
+        parameters = []
+        for param_data in data.get("parameters", []):
+            if isinstance(param_data, dict):
+                parameters.append(EndpointParameter(**param_data))
+        
+        # Convert roles to RoleRequirement models
+        roles = []
+        for role_data in data.get("roles", []):
+            if isinstance(role_data, dict):
+                roles.append(RoleRequirement(**role_data))
+            elif isinstance(role_data, str):
+                roles.append(RoleRequirement(role=role_data))
+        
+        return cls(
+            path=data.get("path", ""),
+            method=HttpMethod(data.get("method", "GET").upper()),
+            operation_id=data.get("operation_id", ""),
+            summary=data.get("summary", ""),
+            description=data.get("description", ""),
+            description_markdown=data.get("description_markdown", ""),
+            tags=data.get("tags", []),
+            parameters=parameters,
+            requestBody=data.get("requestBody"),
+            responses=responses,
+            success_response_body=data.get("success_response_body"),
+            error_response_bodies=data.get("error_response_bodies", []),
+            typed_success_response_body=data.get("typed_success_response_body"),
+            security=data.get("security", []),
+            roles=roles,
+            is_featured=data.get("is_featured", False),
+            special_instructions=data.get("special_instructions", ""),
+            connector_methods=data.get("connector_methods", []),
+        )
 
 
 class EndpointIndex:
@@ -23,6 +207,9 @@ class EndpointIndex:
     
     Index entries contain minimal information (id, name, method, path, summary, tags)
     while full schemas are stored in a separate file and loaded on-demand.
+    
+    This class provides both typed (Pydantic models) and raw (dict) access methods
+    for flexibility in different use cases.
     """
     
     def __init__(self, index_file: Optional[str] = None, schemas_file: Optional[str] = None):
@@ -51,6 +238,10 @@ class EndpointIndex:
         self._schemas: Dict[str, Dict[str, Any]] = {}  # On-demand loaded schemas
         self._schemas_loaded = False
         
+        # Cached Pydantic model instances
+        self._index_models: Dict[str, EndpointSummary] = {}
+        self._schema_models: Dict[str, EndpointSchema] = {}
+        
         # Load index if it exists
         if self.index_file.exists():
             self._load_index()
@@ -61,10 +252,13 @@ class EndpointIndex:
             with open(self.index_file, 'r') as f:
                 data = json.load(f)
                 self._index = data.get('endpoints', {})
+                # Clear cached models when reloading
+                self._index_models = {}
                 logger.info(f"Loaded {len(self._index)} endpoints from index")
         except Exception as e:
             logger.error(f"Failed to load endpoint index: {e}")
             self._index = {}
+            self._index_models = {}
     
     def _load_schemas(self) -> None:
         """Load endpoint schemas from disk (lazy loaded on first access)."""
@@ -75,6 +269,8 @@ class EndpointIndex:
             if self.schemas_file.exists():
                 with open(self.schemas_file, 'r') as f:
                     self._schemas = json.load(f)
+                # Clear cached models when reloading
+                self._schema_models = {}
                 logger.info(f"Loaded {len(self._schemas)} endpoint schemas")
             else:
                 logger.warning(f"Schemas file not found: {self.schemas_file}")
@@ -161,7 +357,90 @@ class EndpointIndex:
                     "requestBody": details.get("requestBody"),
                     "responses": details.get("responses", {}),
                     "security": details.get("security", []),
+                    "roles": details.get("roles", [])
                 }
+        
+        logger.info(f"Built index with {len(self._index)} endpoints")
+        logger.info(f"Built schemas for {len(self._schemas)} endpoints")
+        self._save_index()
+        self._save_schemas()
+        self._schemas_loaded = True
+    
+    def build_index_from_resource_docs(self, resource_docs_data: Dict[str, Any]) -> None:
+        """
+        Build the lightweight endpoint index and full schemas from OBP resource docs.
+        
+        Resource docs provide richer information than swagger, including:
+        - Roles/entitlements required for each endpoint
+        - Markdown descriptions
+        - Example success/error response bodies
+        - Typed response schemas
+        - Connector methods
+        
+        Args:
+            resource_docs_data: Resource docs response from OBP API
+        """
+        self._index = {}
+        self._schemas = {}
+        self._index_models = {}
+        self._schema_models = {}
+        
+        resource_docs = resource_docs_data.get("resource_docs", [])
+        
+        logger.info(f"Building index from {len(resource_docs)} resource docs...")
+        
+        for doc in resource_docs:
+            if not isinstance(doc, dict):
+                continue
+            
+            # Extract fields from resource doc format
+            operation_id = doc.get("operation_id", "")
+            method = doc.get("request_verb", "GET").upper()
+            path = doc.get("request_url", "")
+            summary = doc.get("summary", "")
+            tags = doc.get("tags", [])
+            
+            # Use operation_id as the endpoint ID (fallback to generated ID if not present)
+            if operation_id:
+                endpoint_id = operation_id
+            else:
+                endpoint_id = self._generate_endpoint_id(method, path)
+                logger.warning(f"No operation_id for {method} {path}, using generated ID: {endpoint_id}")
+            
+            # Store lightweight index entry
+            self._index[endpoint_id] = {
+                "id": endpoint_id,
+                "method": method,
+                "path": path,
+                "operation_id": operation_id,
+                "summary": summary,
+                "tags": tags
+            }
+            
+            # Extract roles from resource docs format
+            roles = doc.get("roles", [])
+            
+            # Store full schema separately (keyed by endpoint_id)
+            self._schemas[endpoint_id] = {
+                "path": path,
+                "method": method,
+                "operation_id": operation_id,
+                "summary": summary,
+                "description": doc.get("description", ""),
+                "description_markdown": doc.get("description_markdown", ""),
+                "tags": tags,
+                "parameters": [],  # Resource docs don't provide parameters in the same way
+                "requestBody": None,
+                "responses": {},
+                "success_response_body": doc.get("success_response_body"),
+                "error_response_bodies": doc.get("error_response_bodies", []),
+                "typed_success_response_body": doc.get("typed_success_response_body"),
+                "security": [],
+                "roles": roles,
+                "is_featured": doc.get("is_featured", False),
+                "special_instructions": doc.get("special_instructions", ""),
+                "connector_methods": doc.get("connector_methods", []),
+            }
         
         logger.info(f"Built index with {len(self._index)} endpoints")
         logger.info(f"Built schemas for {len(self._schemas)} endpoints")
@@ -177,7 +456,38 @@ class EndpointIndex:
             clean_path = clean_path[1:]
         return f"{method.upper()}{clean_path}"
     
-    def list_endpoints_by_tag(self, tags: List[str]) -> List[Dict[str, Any]]:
+    def _get_summary_model(self, endpoint_id: str) -> Optional[EndpointSummary]:
+        """Get or create a cached EndpointSummary model for an endpoint."""
+        if endpoint_id not in self._index:
+            return None
+        
+        if endpoint_id not in self._index_models:
+            try:
+                self._index_models[endpoint_id] = EndpointSummary(**self._index[endpoint_id])
+            except Exception as e:
+                logger.warning(f"Failed to create EndpointSummary for {endpoint_id}: {e}")
+                return None
+        
+        return self._index_models[endpoint_id]
+    
+    def _get_schema_model(self, endpoint_id: str) -> Optional[EndpointSchema]:
+        """Get or create a cached EndpointSchema model for an endpoint."""
+        if not self._schemas_loaded:
+            self._load_schemas()
+        
+        if endpoint_id not in self._schemas:
+            return None
+        
+        if endpoint_id not in self._schema_models:
+            try:
+                self._schema_models[endpoint_id] = EndpointSchema.from_raw(self._schemas[endpoint_id])
+            except Exception as e:
+                logger.warning(f"Failed to create EndpointSchema for {endpoint_id}: {e}")
+                return None
+        
+        return self._schema_models[endpoint_id]
+    
+    def list_endpoints_by_tag(self, tags: List[str]) -> List[EndpointSummary]:
         """
         Get endpoints that match any of the provided tags.
         
@@ -185,7 +495,39 @@ class EndpointIndex:
             tags: List of tag names to filter by
             
         Returns:
-            List of endpoint summaries (no full schemas)
+            List of EndpointSummary models (type-safe)
+        """
+        if not tags:
+            # Return all endpoints if no tags specified
+            return [
+                model for endpoint_id in self._index
+                if (model := self._get_summary_model(endpoint_id)) is not None
+            ]
+        
+        results: List[EndpointSummary] = []
+        tags_lower = [tag.lower() for tag in tags]
+        
+        for endpoint_id, endpoint in self._index.items():
+            endpoint_tags = [t.lower() for t in endpoint.get("tags", [])]
+            
+            # Check if any of the requested tags match
+            if any(tag in endpoint_tags for tag in tags_lower):
+                model = self._get_summary_model(endpoint_id)
+                if model is not None:
+                    results.append(model)
+        
+        logger.info(f"Found {len(results)} endpoints for tags: {tags}")
+        return results
+    
+    def list_endpoints_by_tag_raw(self, tags: List[str]) -> List[Dict[str, Any]]:
+        """
+        Get endpoints that match any of the provided tags (raw dict format).
+        
+        Args:
+            tags: List of tag names to filter by
+            
+        Returns:
+            List of endpoint summaries as dictionaries
         """
         if not tags:
             # Return all endpoints if no tags specified
@@ -204,7 +546,7 @@ class EndpointIndex:
         logger.info(f"Found {len(results)} endpoints for tags: {tags}")
         return results
     
-    def get_endpoint_schema(self, endpoint_id: str) -> Optional[Dict[str, Any]]:
+    def get_endpoint_schema(self, endpoint_id: str) -> Optional[EndpointSchema]:
         """
         Get the full OpenAPI schema for a specific endpoint (lazy-loaded from file).
         
@@ -212,7 +554,31 @@ class EndpointIndex:
             endpoint_id: The unique identifier of the endpoint
             
         Returns:
-            Full endpoint schema or None if not found
+            EndpointSchema model or None if not found
+        """
+        model = self._get_schema_model(endpoint_id)
+        
+        if model is not None:
+            logger.debug(f"Found schema for {endpoint_id}")
+            return model
+        
+        # Check if endpoint exists in index but schema is missing
+        if endpoint_id in self._index:
+            logger.warning(f"Schema not found for endpoint {endpoint_id} - try regenerating the index")
+        else:
+            logger.warning(f"Endpoint {endpoint_id} not found in index")
+        
+        return None
+    
+    def get_endpoint_schema_raw(self, endpoint_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the full OpenAPI schema for a specific endpoint as raw dict.
+        
+        Args:
+            endpoint_id: The unique identifier of the endpoint
+            
+        Returns:
+            Full endpoint schema as dictionary or None if not found
         """
         # Lazy load schemas if not already loaded
         if not self._schemas_loaded:
@@ -243,7 +609,7 @@ class EndpointIndex:
             tags.update(endpoint.get("tags", []))
         return sorted(list(tags))
     
-    def get_endpoint_by_id(self, endpoint_id: str) -> Optional[Dict[str, Any]]:
+    def get_endpoint_by_id(self, endpoint_id: str) -> Optional[EndpointSummary]:
         """
         Get endpoint summary by ID.
 
@@ -251,7 +617,19 @@ class EndpointIndex:
             endpoint_id: The unique identifier of the endpoint
 
         Returns:
-            Endpoint summary or None if not found
+            EndpointSummary model or None if not found
+        """
+        return self._get_summary_model(endpoint_id)
+    
+    def get_endpoint_by_id_raw(self, endpoint_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get endpoint summary by ID as raw dict.
+
+        Args:
+            endpoint_id: The unique identifier of the endpoint
+
+        Returns:
+            Endpoint summary as dictionary or None if not found
         """
         return self._index.get(endpoint_id)
 
@@ -267,6 +645,8 @@ class EndpointIndex:
         # Reset the schemas loaded flag so schemas will be reloaded on next access
         self._schemas_loaded = False
         self._schemas = {}
+        self._schema_models = {}
+        self._index_models = {}
 
         # Reload the index
         if self.index_file.exists():

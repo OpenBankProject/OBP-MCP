@@ -343,9 +343,14 @@ class KeycloakAuthProvider(RemoteAuthProvider):
                     status_code=500,
                 )
 
+        suffix = mcp_path or ""
         routes.append(
-            Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server_metadata, methods=["GET"])
+            Route(f"/.well-known/oauth-authorization-server{suffix}", endpoint=oauth_authorization_server_metadata, methods=["GET"])
         )
+        if suffix:
+            routes.append(
+                Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server_metadata, methods=["GET"])
+            )
 
         async def register_client_fix_auth_method(request):
             """Minimal DCR proxy that fixes token_endpoint_auth_method in Keycloak's response."""
@@ -467,11 +472,12 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                 audience=audience,
             )
 
-        # OBP-OIDC is advertised directly as the authorization server
-        # No proxy needed - OBP-OIDC has native DCR support with correct token_endpoint_auth_method
+        # Advertise ourselves as the authorization server so all discovery and DCR
+        # flows route through our proxy — this lets us fix incompatibilities in
+        # OBP-OIDC's responses (e.g. null fields in DCR) before they reach clients.
         super().__init__(
             token_verifier=token_verifier,
-            authorization_servers=[AnyHttpUrl(self.issuer_url)],
+            authorization_servers=[self.base_url],
             base_url=self.base_url,
         )
 
@@ -499,6 +505,11 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                         )
                     response.raise_for_status()
                     metadata = response.json()
+
+                    # Route DCR through our proxy so we can fix null fields
+                    base_url = str(self.base_url).rstrip("/")
+                    metadata["registration_endpoint"] = f"{base_url}/register"
+
                     return JSONResponse(metadata)
             except httpx.HTTPStatusError as e:
                 logger.error(f"Failed to fetch OBP-OIDC metadata: {e}")
@@ -523,6 +534,11 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                     )
                     response.raise_for_status()
                     metadata = response.json()
+
+                    # Route DCR through our proxy so we can fix null fields
+                    base_url = str(self.base_url).rstrip("/")
+                    metadata["registration_endpoint"] = f"{base_url}/register"
+
                     return JSONResponse(metadata)
             except httpx.HTTPStatusError as e:
                 logger.error(f"Failed to fetch OBP-OIDC openid-configuration: {e}")
@@ -555,11 +571,17 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                     registration_endpoint = f"{self.issuer_url}/connect/register"
                     response = await client.post(registration_endpoint, content=body, headers=forward_headers)
 
-                    # Forward the response as-is (OBP-OIDC returns correct token_endpoint_auth_method)
-                    return JSONResponse(
-                        response.json() if response.headers.get("content-type", "").startswith("application/json") else {"error": "registration_failed"},
-                        status_code=response.status_code,
-                    )
+                    if not response.headers.get("content-type", "").startswith("application/json"):
+                        return JSONResponse({"error": "registration_failed"}, status_code=response.status_code)
+
+                    client_info = response.json()
+
+                    # Strip null values — OBP-OIDC returns nulls for optional fields
+                    # (client_uri, logo_uri, contacts) that strict clients expect to be
+                    # absent rather than null
+                    client_info = {k: v for k, v in client_info.items() if v is not None}
+
+                    return JSONResponse(client_info, status_code=response.status_code)
 
             except Exception as e:
                 logger.error(f"DCR forward error: {e}")
@@ -568,13 +590,23 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                     status_code=500,
                 )
 
-        # Add forwarding routes for clients that fetch from the resource server
+        # Add forwarding routes at both paths:
+        # - With mcp_path suffix: for RFC 8414 path-aware discovery from MCP endpoint URL
+        # - Without suffix: for OASM discovery from authorization_servers URL (no path)
+        suffix = mcp_path or ""
         routes.append(
-            Route("/.well-known/oauth-authorization-server", endpoint=forward_oauth_authorization_server_metadata, methods=["GET"])
+            Route(f"/.well-known/oauth-authorization-server{suffix}", endpoint=forward_oauth_authorization_server_metadata, methods=["GET"])
         )
         routes.append(
-            Route("/.well-known/openid-configuration", endpoint=forward_openid_configuration, methods=["GET"])
+            Route(f"/.well-known/openid-configuration{suffix}", endpoint=forward_openid_configuration, methods=["GET"])
         )
+        if suffix:
+            routes.append(
+                Route("/.well-known/oauth-authorization-server", endpoint=forward_oauth_authorization_server_metadata, methods=["GET"])
+            )
+            routes.append(
+                Route("/.well-known/openid-configuration", endpoint=forward_openid_configuration, methods=["GET"])
+            )
         routes.append(
             Route("/register", endpoint=forward_register, methods=["POST"])
         )

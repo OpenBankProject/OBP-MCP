@@ -110,11 +110,11 @@ You can then configure the connection to the server from there.
 
 ### VS Code
 
-Configure in `~/.config/Code/User/mcp.json`:
+Configure in the servers section of `~/.config/Code/User/mcp.json`:
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "obp-mcp": {
       "url": "http://0.0.0.0:9100/mcp",
       "type": "http"

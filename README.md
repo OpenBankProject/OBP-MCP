@@ -176,6 +176,19 @@ This is a global config that makes the obp-mcp server available to all projects.
 
 See [docs/HYBRID_ROUTING.md](docs/HYBRID_ROUTING.md) for details.
 
+## Appendix 1 - Opey setup
+
+To set up with opey, use the following setup:
+
+```bash
+# .env
+ENABLE_OAUTH="true"
+AUTH_PROVIDER=bearer-only
+OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
+OBP_AUTHORIZATION_VIA="consent"
+```
+> [!NOTE] You will not be able to use the MCP server, set up in this way, with any other MCP clients, unless they are capable of creating valid consents onl the fly.
+
 ## License
 
 AGPLv3

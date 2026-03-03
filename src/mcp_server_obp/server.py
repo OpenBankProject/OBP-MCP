@@ -295,11 +295,11 @@ async def call_obp_api(
                     }, indent=2)
                 request_headers["Consent-JWT"] = consent_jwt
                 
-                consumer_key = os.getenv("OPEY_OBP_CONSUMER_KEY")
+                consumer_key = os.getenv("OBP_OPEY_CONSUMER_KEY")
                 if consumer_key:
                     request_headers["Consumer-Key"] = consumer_key
                 else:
-                    logger.warning("OPEY_OBP_CONSUMER_KEY is not set in environment variables. Consent-based authorization will fail without it.")
+                    logger.warning("OBP_OPEY_CONSUMER_KEY is not set in environment variables. Consent-based authorization will fail without it.")
                     
             case "none":
                 # No authorization

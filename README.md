@@ -186,6 +186,7 @@ ENABLE_OAUTH="true"
 AUTH_PROVIDER=bearer-only
 OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
 OBP_AUTHORIZATION_VIA="consent"
+OBP_OPEY_CONSUMER_KEY=<opey's consumer key (same as the OBP_CONSUMER_KEY in Opey)>
 ```
 > [!NOTE] You will not be able to use the MCP server, set up in this way, with any other MCP clients, unless they are capable of creating valid consents onl the fly.
 

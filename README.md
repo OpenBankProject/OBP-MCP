@@ -196,9 +196,8 @@ In Opey's `mcp_servers.json` (inside the servers array):
       "name": "obp",
       "url": "http://0.0.0.0:9101/mcp",
       "transport": "http",
-      "requires_auth": true
+      "forward_bearer_token": true
 }
-
 ```
 
 ## License

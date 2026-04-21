@@ -94,42 +94,67 @@ def list_all_endpoint_tags() -> str:
         return json.dumps({"error": str(e)}, indent=2)
 
 
+LIST_ENDPOINTS_MAX_RESULTS = 100
+
+
 @mcp.tool()
 def list_endpoints_by_tag(tags: List[str]) -> str:
     """
     Get available OBP API endpoints for given tags. Returns lightweight summaries (no full schemas).
-    
+
     This is the recommended first step for discovering relevant endpoints. Use this to get a list
     of endpoints matching certain categories, then use get_endpoint_schema() to fetch full details
     for specific endpoints.
-    
+
     Args:
-        tags: List of tag names to filter endpoints (e.g., ["Account", "Transaction", "Customer"])
-              If empty, returns all available endpoints.
-    
+        tags: List of tag names to filter endpoints (e.g., ["Account", "Transaction", "Customer"]).
+              Must be non-empty — call list_all_endpoint_tags() first to discover available tags.
+              Returning all endpoints at once is not supported because the response can exceed
+              model context windows.
+
     Returns:
-        JSON string with endpoint summaries including: id, method, path, operation_id, summary, tags
-    
+        JSON string with endpoint summaries including: id, method, path, operation_id, summary, tags.
+        Capped at LIST_ENDPOINTS_MAX_RESULTS summaries; if more exist, the response includes
+        `truncated: true` and a `total_available` count — narrow the tag list to see the rest.
+
     Example:
-        list_endpoints_by_tag(["Account", "Bank"]) -> Returns all endpoints tagged with Account or Bank
+        list_endpoints_by_tag(["Account", "Bank"]) -> Endpoints tagged with Account or Bank
     """
     try:
+        if not tags:
+            return json.dumps({
+                "error": "tags must be non-empty",
+                "suggestion": "Call list_all_endpoint_tags() first to discover available tags, then pass one or more.",
+            }, indent=2)
+
         index = get_endpoint_index()
         endpoints = index.list_endpoints_by_tag(tags)
-        
+
         if not endpoints:
             return json.dumps({
                 "message": f"No endpoints found for tags: {tags}",
                 "available_tags": index.get_all_tags()[:20],  # Show first 20 tags as hints
                 "total_endpoints": len(index._index)
             }, indent=2)
-        
-        # Serialize Pydantic models to dictionaries
-        return json.dumps({
+
+        total_available = len(endpoints)
+        truncated = total_available > LIST_ENDPOINTS_MAX_RESULTS
+        endpoints = endpoints[:LIST_ENDPOINTS_MAX_RESULTS]
+
+        payload = {
             "count": len(endpoints),
-            "endpoints": [ep.model_dump() for ep in endpoints]
-        }, indent=2)
-        
+            "endpoints": [ep.model_dump() for ep in endpoints],
+        }
+        if truncated:
+            payload["truncated"] = True
+            payload["total_available"] = total_available
+            payload["hint"] = (
+                f"Only the first {LIST_ENDPOINTS_MAX_RESULTS} of {total_available} endpoints are returned. "
+                "Narrow the tag list to see the rest."
+            )
+
+        return json.dumps(payload, indent=2)
+
     except Exception as e:
         logger.error(f"Error listing endpoints by tag: {e}")
         return json.dumps({"error": str(e)}, indent=2)
@@ -282,18 +307,28 @@ async def call_obp_api(
                                 if body_role not in required_roles:
                                     required_roles.append(body_role)
 
-                    return json.dumps({
-                        "error": "consent_required",
-                        "endpoint_id": endpoint_id,
-                        "operation_id": endpoint.operation_id,
-                        "method": endpoint.method,
-                        "path": endpoint.path,
-                        "required_roles": required_roles,
-                        "bank_id": bank_id,
-                        "message": f"User consent is required to call {endpoint.operation_id}. "
-                                   f"Please approve and provide a Consent-JWT.",
-                    }, indent=2)
-                request_headers["Consent-JWT"] = consent_jwt
+                    # If the endpoint requires no roles at all, treat it as public and skip
+                    # the consent prompt. OBP will reject the call if it actually needs auth,
+                    # which is a better UX than a meaningless "grant consent" dialog for e.g.
+                    # GET /root.
+                    if not required_roles:
+                        logger.info(
+                            f"Skipping consent for {endpoint.operation_id}: endpoint has no required roles"
+                        )
+                    else:
+                        return json.dumps({
+                            "error": "consent_required",
+                            "endpoint_id": endpoint_id,
+                            "operation_id": endpoint.operation_id,
+                            "method": endpoint.method,
+                            "path": endpoint.path,
+                            "required_roles": required_roles,
+                            "bank_id": bank_id,
+                            "message": f"User consent is required to call {endpoint.operation_id}. "
+                                       f"Please approve and provide a Consent-JWT.",
+                        }, indent=2)
+                else:
+                    request_headers["Consent-JWT"] = consent_jwt
                 
                 consumer_key = os.getenv("OBP_OPEY_CONSUMER_KEY")
                 if consumer_key:

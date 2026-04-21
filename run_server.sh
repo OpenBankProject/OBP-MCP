@@ -16,7 +16,7 @@ fi
 export FASTMCP_HOST=${FASTMCP_HOST:-0.0.0.0}
 export FASTMCP_PORT=${FASTMCP_PORT:-9100}
 export OBP_BASE_URL=${OBP_BASE_URL:-https://apisandbox.openbankproject.com}
-export OBP_API_VERSION=${OBP_API_VERSION:-v5.1.0}
+export OBP_API_VERSION=${OBP_API_VERSION:-v7.0.0}
 
 # Parse command line arguments
 WATCH_MODE=false

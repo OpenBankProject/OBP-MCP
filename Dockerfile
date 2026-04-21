@@ -22,7 +22,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV FASTMCP_HOST=0.0.0.0
 ENV FASTMCP_PORT=9100
 ENV OBP_BASE_URL=https://apisandbox.openbankproject.com
-ENV OBP_API_VERSION=v5.1.0
+ENV OBP_API_VERSION=v7.0.0
 
 EXPOSE 9100
 

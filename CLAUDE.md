@@ -75,7 +75,7 @@ Additional tools: `list_glossary_terms(search_query)` and `get_glossary_term(ter
 All config via environment variables. Copy `.env.example` to `.env`. Key variables:
 
 - `OBP_BASE_URL` — OBP API instance URL
-- `OBP_API_VERSION` — API version (e.g., `v6.0.0`)
+- `OBP_API_VERSION` — API version (e.g., `v7.0.0`)
 - `AUTH_PROVIDER` — Authentication mode (see table above)
 - `OBP_AUTHORIZATION_VIA` — How API calls are authorized: `oauth`, `consent`, or `none`
 - `LOG_LEVEL` — `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`

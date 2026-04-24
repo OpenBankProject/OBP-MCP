@@ -35,6 +35,7 @@ from src.tools.glossary_index import get_glossary_index
 
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
+from mcp_server_obp.status import health_endpoint, ready_endpoint, status_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -563,6 +564,15 @@ def glossary_term(term_id: str) -> str:
     except Exception as e:
         logger.error(f"Error getting glossary term: {e}")
         return f"Error: {str(e)}"
+
+
+# ============================================================================
+# PUBLIC STATUS PAGE
+# ============================================================================
+
+mcp.custom_route("/status", methods=["GET"])(status_endpoint)
+mcp.custom_route("/health", methods=["GET"])(health_endpoint)
+mcp.custom_route("/ready", methods=["GET"])(ready_endpoint)
 
 
 # ============================================================================

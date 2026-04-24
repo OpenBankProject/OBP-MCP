@@ -36,6 +36,155 @@ from fastmcp.utilities.auth import parse_scopes
 logger = logging.getLogger(__name__)
 
 
+async def _log_token_diagnostics(
+    token: str,
+    *,
+    expected_issuer: str | list[str] | None,
+    expected_audience: str | list[str] | None,
+    expected_algorithm: str | None,
+    jwks_uri: str | None,
+    required_scopes: list[str] | set[str] | None = None,
+    exception: Exception | None = None,
+) -> None:
+    """Decode a failing JWT without verification and log everything relevant
+    for diagnosing why validation failed.
+
+    Logs the token's header (kid, alg) and payload (iss, aud, sub, exp, scope),
+    compares them against the verifier's expectations, and fetches the JWKS to
+    show which key IDs are currently published.
+
+    This NEVER logs the token itself or its signature — only decoded claims.
+    """
+    import time
+
+    logger.warning("═══ JWT validation failed — diagnostics ═══")
+    if exception is not None:
+        logger.warning(f"Verifier raised: {type(exception).__name__}: {exception}")
+
+    # Header (kid, alg, typ)
+    token_kid: str | None = None
+    token_alg: str | None = None
+    try:
+        header = pyjwt.get_unverified_header(token)
+        token_kid = header.get("kid")
+        token_alg = header.get("alg")
+        logger.warning(
+            f"  Token header: kid={token_kid!r}, alg={token_alg!r}, typ={header.get('typ')!r}"
+        )
+    except Exception as e:
+        logger.warning(f"  Token header: <could not decode: {e}>")
+
+    # Payload (iss, aud, sub, exp, scope, etc.)
+    payload: dict = {}
+    try:
+        payload = pyjwt.decode(token, options={"verify_signature": False})
+        exp = payload.get("exp")
+        iat = payload.get("iat")
+        now = int(time.time())
+        expired = (exp is not None and exp < now)
+        logger.warning(
+            f"  Token payload: iss={payload.get('iss')!r}, aud={payload.get('aud')!r}, "
+            f"sub={payload.get('sub')!r}, azp={payload.get('azp')!r}, "
+            f"client_id={payload.get('client_id')!r}"
+        )
+        logger.warning(
+            f"  Token timing : iat={iat}, exp={exp}, now={now}, "
+            f"expired={expired}, age_s={(now - iat) if iat else 'n/a'}"
+        )
+        logger.warning(f"  Token scope  : {payload.get('scope')!r} (scp={payload.get('scp')!r})")
+    except Exception as e:
+        logger.warning(f"  Token payload: <could not decode: {e}>")
+
+    # Expectations
+    logger.warning(
+        f"  Expected     : issuer={expected_issuer!r}, audience={expected_audience!r}, "
+        f"algorithm={expected_algorithm!r}, required_scopes={list(required_scopes) if required_scopes else None}"
+    )
+
+    # Specific mismatch checks
+    token_iss = payload.get("iss") if payload else None
+    token_aud = payload.get("aud") if payload else None
+
+    if expected_issuer and token_iss is not None:
+        expected_list = expected_issuer if isinstance(expected_issuer, list) else [expected_issuer]
+        if token_iss not in expected_list:
+            logger.warning(
+                f"  ✗ ISSUER MISMATCH: token iss={token_iss!r} not in expected {expected_list!r}"
+            )
+
+    if expected_audience and token_aud is not None:
+        token_aud_list = token_aud if isinstance(token_aud, list) else [token_aud]
+        expected_aud_list = (
+            expected_audience if isinstance(expected_audience, list) else [expected_audience]
+        )
+        if not any(e in token_aud_list for e in expected_aud_list):
+            logger.warning(
+                f"  ✗ AUDIENCE MISMATCH: token aud={token_aud!r} does not include any of {expected_aud_list!r}"
+            )
+
+    if expected_algorithm and token_alg and token_alg != expected_algorithm:
+        logger.warning(
+            f"  ✗ ALGORITHM MISMATCH: token alg={token_alg!r}, verifier configured for {expected_algorithm!r}"
+        )
+
+    # Fetch JWKS and check whether the token's kid is present
+    if jwks_uri and token_kid:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(jwks_uri)
+                resp.raise_for_status()
+                jwks = resp.json()
+            available_kids = [k.get("kid") for k in jwks.get("keys", [])]
+            logger.warning(f"  JWKS {jwks_uri} currently publishes kids: {available_kids}")
+            if token_kid not in available_kids:
+                logger.warning(
+                    f"  ✗ KID MISMATCH: token kid={token_kid!r} not in JWKS "
+                    f"(likely key rotation or token signed by a different IdP)"
+                )
+        except Exception as e:
+            logger.warning(f"  Could not fetch JWKS for diagnostic comparison: {e}")
+
+    logger.warning("═══ end diagnostics ═══")
+
+
+class LoggingJWTVerifier(JWTVerifier):
+    """Thin subclass of the library's JWTVerifier that logs a full diagnostic
+    report whenever token validation fails.
+
+    The base class logs failures only at DEBUG and swallows the reason, which
+    makes 401s opaque in production (where LOG_LEVEL is typically INFO). This
+    wrapper emits a WARNING with the token's iss/aud/kid/exp/scope, the
+    verifier's expectations, and the JWKS keys actually published — enough to
+    tell at a glance whether you're looking at key rotation, an issuer
+    mismatch, an audience mismatch, or an expired token.
+    """
+
+    async def verify_token(self, token: str):
+        try:
+            result = await super().verify_token(token)
+        except Exception as e:
+            await _log_token_diagnostics(
+                token,
+                expected_issuer=self.issuer,
+                expected_audience=self.audience,
+                expected_algorithm=self.algorithm,
+                jwks_uri=self.jwks_uri,
+                required_scopes=self.required_scopes,
+                exception=e,
+            )
+            raise
+        if result is None:
+            await _log_token_diagnostics(
+                token,
+                expected_issuer=self.issuer,
+                expected_audience=self.audience,
+                expected_algorithm=self.algorithm,
+                jwks_uri=self.jwks_uri,
+                required_scopes=self.required_scopes,
+            )
+        return result
+
+
 class AuthProviderType(str, Enum):
     """Supported authentication provider types."""
     KEYCLOAK = "keycloak"
@@ -139,7 +288,7 @@ class MultiIssuerJWTVerifier(TokenVerifier):
         self._verifiers: dict[str, JWTVerifier] = {}
 
         for config in issuers:
-            verifier = JWTVerifier(
+            verifier = LoggingJWTVerifier(
                 jwks_uri=config.jwks_uri,
                 issuer=config.issuer,
                 algorithm=config.algorithm,
@@ -297,7 +446,7 @@ class KeycloakAuthProvider(RemoteAuthProvider):
         parsed_scopes = parse_scopes(required_scopes) if required_scopes else None
 
         if token_verifier is None:
-            token_verifier = JWTVerifier(
+            token_verifier = LoggingJWTVerifier(
                 jwks_uri=f"{self.realm_url}/protocol/openid-connect/certs",
                 issuer=self.realm_url,
                 algorithm="RS256",
@@ -464,7 +613,7 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
 
         if token_verifier is None:
             # OBP-OIDC uses standard OIDC endpoint patterns
-            token_verifier = JWTVerifier(
+            token_verifier = LoggingJWTVerifier(
                 jwks_uri=f"{self.issuer_url}/jwks",
                 issuer=self.issuer_url,
                 algorithm="RS256",
@@ -693,7 +842,7 @@ def create_bearer_auth(
     logger.debug(f"Required scopes: {parsed_scopes}")
     logger.debug(f"Audience: {audience}")
 
-    return JWTVerifier(
+    return LoggingJWTVerifier(
         jwks_uri=jwks_uri,
         issuer=issuer,
         algorithm=algorithm,
@@ -905,6 +1054,7 @@ __all__ = [
     "AuthProviderType",
     "IssuerConfig",
     "KeycloakAuthProvider",
+    "LoggingJWTVerifier",
     "MultiIssuerJWTVerifier",
     "OBPOIDCAuthProvider",
     "create_bearer_auth",

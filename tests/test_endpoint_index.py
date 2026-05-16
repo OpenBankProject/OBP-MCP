@@ -232,6 +232,35 @@ class TestEndpointSchema:
         assert len(schema.responses) == 2
         assert schema.responses["200"].description == "Success"
 
+    def test_schema_carries_request_body_example_from_resource_docs(self):
+        """Resource-docs request-body examples should be exposed, not dropped."""
+        raw_data = {
+            "path": "/obp/v6.0.0/banks",
+            "method": "POST",
+            "operation_id": "OBPv6.0.0-createBank",
+            "summary": "Create Bank",
+            "tags": ["Bank"],
+            "example_request_body": {
+                "bank_id": "gh.29.uk",
+                "bank_code": "CGHZ",
+                "full_name": "Bank of Example",
+            },
+            "typed_request_body": {
+                "type": "object",
+                "properties": {
+                    "bank_id": {"type": "string"},
+                    "bank_code": {"type": "string"},
+                },
+            },
+        }
+        schema = EndpointSchema.from_raw(raw_data)
+        assert schema.example_request_body is not None
+        assert schema.example_request_body["bank_id"] == "gh.29.uk"
+        assert schema.typed_request_body is not None
+        assert schema.typed_request_body["properties"]["bank_id"]["type"] == "string"
+        # OpenAPI-style requestBody stays None on the resource-docs path.
+        assert schema.requestBody is None
+
     def test_schema_serialization(self):
         """Test that schema serializes to JSON correctly."""
         schema = EndpointSchema(

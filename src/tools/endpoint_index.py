@@ -134,7 +134,9 @@ class EndpointSchema(BaseModel):
     description_markdown: str = Field(default="", description="Description in markdown format")
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
     parameters: List[EndpointParameter] = Field(default_factory=list, description="Endpoint parameters")
-    requestBody: Optional[Dict[str, Any]] = Field(default=None, description="Request body specification")
+    requestBody: Optional[Dict[str, Any]] = Field(default=None, description="OpenAPI-style request body specification (from swagger path)")
+    example_request_body: Optional[Dict[str, Any]] = Field(default=None, description="Concrete example request body (from OBP resource-docs)")
+    typed_request_body: Optional[Dict[str, Any]] = Field(default=None, description="JSON Schema for request body (from OBP resource-docs)")
     responses: Dict[str, EndpointResponse] = Field(default_factory=dict, description="Response specifications by status code")
     success_response_body: Optional[Dict[str, Any]] = Field(default=None, description="Example success response body")
     error_response_bodies: List[str] = Field(default_factory=list, description="Possible error response messages")
@@ -189,6 +191,8 @@ class EndpointSchema(BaseModel):
             tags=data.get("tags", []),
             parameters=parameters,
             requestBody=data.get("requestBody"),
+            example_request_body=data.get("example_request_body"),
+            typed_request_body=data.get("typed_request_body"),
             responses=responses,
             success_response_body=data.get("success_response_body"),
             error_response_bodies=data.get("error_response_bodies", []),
@@ -420,7 +424,11 @@ class EndpointIndex:
             # Extract roles from resource docs format
             roles = doc.get("roles", [])
             
-            # Store full schema separately (keyed by endpoint_id)
+            # Store full schema separately (keyed by endpoint_id).
+            # OBP resource-docs use `example_request_body` / `typed_request_body`
+            # (a concrete example object + a JSON Schema). The OpenAPI-style
+            # `requestBody` field stays None on this path since resource-docs
+            # don't carry that exact shape — clients should prefer the example.
             self._schemas[endpoint_id] = {
                 "path": path,
                 "method": method,
@@ -431,6 +439,8 @@ class EndpointIndex:
                 "tags": tags,
                 "parameters": [],  # Resource docs don't provide parameters in the same way
                 "requestBody": None,
+                "example_request_body": doc.get("example_request_body"),
+                "typed_request_body": doc.get("typed_request_body"),
                 "responses": {},
                 "success_response_body": doc.get("success_response_body"),
                 "error_response_bodies": doc.get("error_response_bodies", []),

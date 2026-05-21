@@ -69,6 +69,7 @@ async def build_status() -> dict[str, Any]:
     obp_api_version = os.getenv("OBP_API_VERSION", "")
     auth_enabled = os.getenv("ENABLE_OAUTH", "false").lower() == "true"
     auth_provider = os.getenv("AUTH_PROVIDER", "none") if auth_enabled else "none"
+    outbound_auth_via = os.getenv("OBP_AUTHORIZATION_VIA", "").lower() or None
 
     issuers: list[dict[str, Any]] = []
     if auth_enabled:
@@ -130,6 +131,7 @@ async def build_status() -> dict[str, Any]:
         "auth": {
             "enabled": auth_enabled,
             "provider": auth_provider,
+            "outbound_auth_via": outbound_auth_via,
             "issuers": issuers,
         },
         "index": {
@@ -269,8 +271,9 @@ def _render_html(data: dict[str, Any]) -> str:
   <section>
     <h2>Authentication</h2>
     <table>
-      {row("OAuth enabled", auth.get("enabled"))}
-      {row("Provider", auth.get("provider"))}
+      {row("OAuth enabled (inbound)", auth.get("enabled"))}
+      {row("Inbound provider", auth.get("provider"))}
+      {row("Outbound to OBP-API (OBP_AUTHORIZATION_VIA)", auth.get("outbound_auth_via"))}
     </table>
     {issuer_sections}
   </section>

@@ -8,6 +8,25 @@ from database.startup_updater import update_index_on_startup
 
 logger = logging.getLogger(__name__)
 
+_VALID_OUTBOUND_AUTH = {"oauth", "consent"}
+
+
+def _validate_outbound_auth() -> None:
+    """Fail loudly at startup if OBP_AUTHORIZATION_VIA isn't oauth or consent.
+
+    The previous 'none' mode let call_obp_api fire unauthenticated requests
+    against OBP-API, which severed the link between a chat session and an
+    identified OBP user. Requiring an explicit mode here makes that
+    impossible by construction.
+    """
+    value = os.getenv("OBP_AUTHORIZATION_VIA", "").lower()
+    if value not in _VALID_OUTBOUND_AUTH:
+        raise RuntimeError(
+            f"OBP_AUTHORIZATION_VIA must be one of {sorted(_VALID_OUTBOUND_AUTH)}; "
+            f"got {value!r}. Refusing to start — unauthenticated OBP-API access is "
+            "no longer supported."
+        )
+
 
 def print_client_configs():
     """Print copy-pasteable MCP client configuration snippets."""
@@ -90,6 +109,7 @@ async def lifespan(server) -> AsyncIterator[dict[str, Any]]:
     """
     # Startup actions
     logger.info("Starting MCP server...")
+    _validate_outbound_auth()
     print_client_configs()
 
     # Check and update index on startup

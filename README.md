@@ -188,6 +188,9 @@ OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
 OBP_AUTHORIZATION_VIA="consent"
 OBP_OPEY_CONSUMER_KEY=<opey's consumer key (same as the OBP_CONSUMER_KEY in Opey)>
 ```
+
+> [!IMPORTANT] `OBP_AUTHORIZATION_VIA` must be set to `oauth` or `consent`. Any other value (including unset) causes the server to refuse to start — unauthenticated OBP-API access is not supported.
+
 > [!NOTE] You will not be able to use the MCP server, set up in this way, with any other MCP clients, unless they are capable of creating valid consents on the fly.
 
 In Opey's `mcp_servers.json` (inside the servers array):

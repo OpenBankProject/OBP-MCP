@@ -276,7 +276,7 @@ async def call_obp_api(
         method = endpoint.method  # HttpMethod enum value
         request_headers = headers or {}
         
-        auth_method = os.getenv("OBP_AUTHORIZATION_VIA", "none").lower()
+        auth_method = os.getenv("OBP_AUTHORIZATION_VIA", "").lower()
         match auth_method:
             case "oauth":
                 logger.info("Using OAuth authorization method for OBP API call")
@@ -308,13 +308,26 @@ async def call_obp_api(
                                 if body_role not in required_roles:
                                     required_roles.append(body_role)
 
-                    # If the endpoint requires no roles at all, treat it as public and skip
-                    # the consent prompt. OBP will reject the call if it actually needs auth,
-                    # which is a better UX than a meaningless "grant consent" dialog for e.g.
-                    # GET /root.
-                    if not required_roles:
+                    # Detect endpoints that need consent even without explicit role
+                    # requirements:
+                    #   * account/view-scoped: path contains ACCOUNT_ID or VIEW_ID — gated by
+                    #     account-access-to-a-view in OBP.
+                    #   * user-scoped: path contains the `/my/` segment — identity-bound, the
+                    #     response depends on which user is calling so we still need a
+                    #     Consent-JWT for the user.
+                    path_segments = (endpoint.path or "").split("/")
+                    requires_view_access = "ACCOUNT_ID" in path_segments or "VIEW_ID" in path_segments
+                    is_user_scoped = "my" in path_segments
+                    account_id = (path_params or {}).get("ACCOUNT_ID") or (path_params or {}).get("account_id")
+                    view_id = (path_params or {}).get("VIEW_ID") or (path_params or {}).get("view_id")
+
+                    # Endpoints with no role requirements AND no account/view/user scoping are
+                    # treated as public — skip the consent prompt (e.g. GET /root). OBP will
+                    # reject the call if it actually needs auth, which is a better UX than a
+                    # meaningless "grant consent" dialog.
+                    if not required_roles and not requires_view_access and not is_user_scoped:
                         logger.info(
-                            f"Skipping consent for {endpoint.operation_id}: endpoint has no required roles"
+                            f"Skipping consent for {endpoint.operation_id}: no required roles, not account/view-scoped, not user-scoped"
                         )
                     else:
                         return json.dumps({
@@ -325,6 +338,10 @@ async def call_obp_api(
                             "path": endpoint.path,
                             "required_roles": required_roles,
                             "bank_id": bank_id,
+                            "account_id": account_id,
+                            "view_id": view_id,
+                            "requires_view_access": requires_view_access,
+                            "is_user_scoped": is_user_scoped,
                             "message": f"User consent is required to call {endpoint.operation_id}. "
                                        f"Please approve and provide a Consent-JWT.",
                         }, indent=2)
@@ -337,14 +354,14 @@ async def call_obp_api(
                 else:
                     logger.warning("OBP_OPEY_CONSUMER_KEY is not set in environment variables. Consent-based authorization will fail without it.")
                     
-            case "none":
-                # No authorization
-                logger.info("No authorization method used for OBP API call")
-                pass
             case _:
-                logger.error(f"Invalid OBP_AUTHORIZATION_VIA value: {auth_method}")
+                logger.error(
+                    f"Invalid OBP_AUTHORIZATION_VIA value: {auth_method!r}. "
+                    "Must be 'oauth' or 'consent'."
+                )
                 return json.dumps({
-                    "error": f"Internal server error."
+                    "error": "OBP-API calls are disabled: OBP_AUTHORIZATION_VIA "
+                             "must be set to 'oauth' or 'consent'."
                 }, indent=2)
                 
         # Make the request

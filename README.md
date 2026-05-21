@@ -194,8 +194,8 @@ In Opey's `mcp_servers.json` (inside the servers array):
 ```json
 {
       "name": "obp",
-      "url": "http://0.0.0.0:9101/mcp",
-      "transport": "http",
+      "url": "http://0.0.0.0:9100/mcp",
+      "transport": "streamable_http",
       "forward_bearer_token": true
 }
 ```

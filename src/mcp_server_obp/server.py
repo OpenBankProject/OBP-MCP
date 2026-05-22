@@ -208,6 +208,35 @@ def get_endpoint_schema(endpoint_id: str) -> str:
         return json.dumps({"error": str(e)}, indent=2)
 
 
+# Genuinely public OBP endpoints — no user identity required. Everything else goes
+# through the consent flow in consent mode. Conservative on purpose: only list paths
+# that are certainly public, since a wrong exclusion just costs an extra prompt while
+# a wrong inclusion would call an identity-bound endpoint with no auth.
+_PUBLIC_PATH_HEADS = {"root", "glossary", "resource-docs", "api"}
+
+
+def _is_public_endpoint(path: str, method: str) -> bool:
+    """True for OBP endpoints that need no user identity (only GET can be public)."""
+    if (method or "").upper() != "GET":
+        return False
+    parts = [p for p in (path or "").split("/") if p]
+    # Drop the leading "obp" and version segment: ["obp","v7.0.0","banks"] -> ["banks"]
+    if len(parts) >= 2 and parts[0] == "obp" and parts[1].startswith("v"):
+        rest = parts[2:]
+    else:
+        rest = parts
+    if not rest:
+        return True  # /obp/vX.Y.Z
+    head = rest[0]
+    if head in _PUBLIC_PATH_HEADS:
+        return True
+    # Bank directory: the bank list and single-bank info are public; anything deeper
+    # (accounts, transactions, …) is not.
+    if head == "banks" and len(rest) <= 2:
+        return True
+    return False
+
+
 @mcp.tool()
 async def call_obp_api(
     ctx: Context,
@@ -308,26 +337,21 @@ async def call_obp_api(
                                 if body_role not in required_roles:
                                     required_roles.append(body_role)
 
-                    # Detect endpoints that need consent even without explicit role
-                    # requirements:
-                    #   * account/view-scoped: path contains ACCOUNT_ID or VIEW_ID — gated by
-                    #     account-access-to-a-view in OBP.
-                    #   * user-scoped: path contains the `/my/` segment — identity-bound, the
-                    #     response depends on which user is calling so we still need a
-                    #     Consent-JWT for the user.
+                    # Scoping metadata for the consent_required payload (used by the
+                    # frontend to build the consent and label the consent card).
                     path_segments = (endpoint.path or "").split("/")
                     requires_view_access = "ACCOUNT_ID" in path_segments or "VIEW_ID" in path_segments
                     is_user_scoped = "my" in path_segments
                     account_id = (path_params or {}).get("ACCOUNT_ID") or (path_params or {}).get("account_id")
                     view_id = (path_params or {}).get("VIEW_ID") or (path_params or {}).get("view_id")
 
-                    # Endpoints with no role requirements AND no account/view/user scoping are
-                    # treated as public — skip the consent prompt (e.g. GET /root). OBP will
-                    # reject the call if it actually needs auth, which is a better UX than a
-                    # meaningless "grant consent" dialog.
-                    if not required_roles and not requires_view_access and not is_user_scoped:
+                    # Consent-by-default: in consent mode every OBP call needs a Consent-JWT
+                    # for the user's identity. Skip ONLY a small allowlist of genuinely public
+                    # endpoints. This fails safe — a wrongly-excluded endpoint just shows an
+                    # extra prompt, whereas guessing "needs auth" wrong fails silently.
+                    if _is_public_endpoint(endpoint.path, endpoint.method):
                         logger.info(
-                            f"Skipping consent for {endpoint.operation_id}: no required roles, not account/view-scoped, not user-scoped"
+                            f"Skipping consent for {endpoint.operation_id}: public endpoint"
                         )
                     else:
                         return json.dumps({

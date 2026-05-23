@@ -221,7 +221,8 @@ python scripts/generate_endpoint_index.py --output /path/to/custom_index.json
 
 **Requirements:**
 - `OBP_BASE_URL` environment variable (e.g., `https://apisandbox.openbankproject.com`)
-- `OBP_API_VERSION` environment variable (e.g., `v7.0.0`)
+- `OBP_VERSION_TO_CALL` environment variable — version of the OBP meta-endpoint to call (e.g., `v7.0.0`)
+- `API_VERSION_OF_INTEREST` environment variable — `requestedApiVersion` for the endpoint catalog (e.g., `v7.0.0`)
 
 ## Deprecated: RAG-Based Tools
 

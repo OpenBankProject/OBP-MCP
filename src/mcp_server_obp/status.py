@@ -22,6 +22,8 @@ import httpx
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
+from database.obp_utils import DEFAULT_API_VERSION
+
 logger = logging.getLogger(__name__)
 
 _START_TIME = time.time()
@@ -66,7 +68,8 @@ async def build_status() -> dict[str, Any]:
     from src.tools.glossary_index import get_glossary_index
 
     obp_base_url = os.getenv("OBP_BASE_URL", "").rstrip("/")
-    obp_api_version = os.getenv("OBP_API_VERSION", "")
+    obp_version_to_call = os.getenv("OBP_VERSION_TO_CALL", DEFAULT_API_VERSION)
+    obp_version_of_interest = os.getenv("API_VERSION_OF_INTEREST", DEFAULT_API_VERSION)
     auth_enabled = os.getenv("ENABLE_OAUTH", "false").lower() == "true"
     auth_provider = os.getenv("AUTH_PROVIDER", "none") if auth_enabled else "none"
     outbound_auth_via = os.getenv("OBP_AUTHORIZATION_VIA", "").lower() or None
@@ -95,8 +98,8 @@ async def build_status() -> dict[str, Any]:
     obp_check: dict[str, Any] | None = None
     if obp_base_url:
         root_url = (
-            f"{obp_base_url}/obp/{obp_api_version}/root"
-            if obp_api_version
+            f"{obp_base_url}/obp/{obp_version_to_call}/root"
+            if obp_version_to_call
             else obp_base_url
         )
         obp_check = {"url": root_url, **(await _check_http(root_url))}
@@ -125,7 +128,8 @@ async def build_status() -> dict[str, Any]:
         },
         "obp_api": {
             "base_url": obp_base_url or None,
-            "api_version": obp_api_version or None,
+            "version_to_call": obp_version_to_call or None,
+            "version_of_interest": obp_version_of_interest or None,
             "check": obp_check,
         },
         "auth": {
@@ -196,7 +200,8 @@ def _render_html(data: dict[str, Any]) -> str:
     obp_check = obp.get("check") or {}
     obp_rows = "".join([
         row("Base URL", obp.get("base_url")),
-        row("API version", obp.get("api_version")),
+        row("Version to call", obp.get("version_to_call")),
+        row("API version of interest", obp.get("version_of_interest")),
         row("Probe URL", obp_check.get("url")),
         row("Reachable", obp_check.get("reachable")),
         row("HTTP status", obp_check.get("status_code")),
@@ -333,11 +338,11 @@ async def ready_endpoint(request: Request) -> Response:
         ok = False
 
     obp_base_url = os.getenv("OBP_BASE_URL", "").rstrip("/")
-    obp_api_version = os.getenv("OBP_API_VERSION", "")
+    obp_version_to_call = os.getenv("OBP_VERSION_TO_CALL", DEFAULT_API_VERSION)
     if obp_base_url:
         url = (
-            f"{obp_base_url}/obp/{obp_api_version}/root"
-            if obp_api_version
+            f"{obp_base_url}/obp/{obp_version_to_call}/root"
+            if obp_version_to_call
             else obp_base_url
         )
         result = await _check_http(url, timeout=2.0)

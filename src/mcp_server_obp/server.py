@@ -33,6 +33,8 @@ from fastmcp.server.dependencies import get_access_token
 from src.tools.endpoint_index import get_endpoint_index
 from src.tools.glossary_index import get_glossary_index
 
+from database.obp_utils import DEFAULT_API_VERSION
+
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
 from mcp_server_obp.status import health_endpoint, ready_endpoint, status_endpoint
@@ -250,7 +252,7 @@ async def call_obp_api(
     Execute an OBP API request to a specific endpoint.
     
     Uses the lightweight endpoint index to construct and execute the API call.
-    Requires OBP_BASE_URL and OBP_API_VERSION environment variables to be set.
+    Requires the OBP_BASE_URL environment variable to be set.
     You may also need authentication headers depending on the endpoint.
     
     Args:
@@ -279,11 +281,11 @@ async def call_obp_api(
         
         # Build the request URL
         base_url = os.getenv("OBP_BASE_URL")
-        api_version = os.getenv("OBP_API_VERSION")
-        
-        if not base_url or not api_version:
+        version_to_call = os.getenv("OBP_VERSION_TO_CALL", DEFAULT_API_VERSION)
+
+        if not base_url:
             return json.dumps({
-                "error": "OBP_BASE_URL and OBP_API_VERSION environment variables must be set"
+                "error": "OBP_BASE_URL environment variable must be set"
             }, indent=2)
         
         # Construct the path with parameters
@@ -296,7 +298,7 @@ async def call_obp_api(
                 path = path.replace(key, str(value))
         
         # Replace VERSION placeholder
-        path = path.replace("VERSION", api_version)
+        path = path.replace("VERSION", version_to_call)
         
         # Build full URL
         url = f"{base_url}{path}"

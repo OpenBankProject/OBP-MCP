@@ -15,7 +15,8 @@ services:
 
       # OBP API Configuration
       OBP_BASE_URL: ${OBP_BASE_URL:-https://apisandbox.openbankproject.com}
-      OBP_API_VERSION: ${OBP_API_VERSION:-v7.0.0}
+      OBP_VERSION_TO_CALL: ${OBP_VERSION_TO_CALL:-v7.0.0}
+      API_VERSION_OF_INTEREST: ${API_VERSION_OF_INTEREST:-v7.0.0}
 
       # Authentication Configuration (optional)
       ENABLE_OAUTH: ${ENABLE_OAUTH:-false}

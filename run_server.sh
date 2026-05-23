@@ -16,7 +16,8 @@ fi
 export FASTMCP_HOST=${FASTMCP_HOST:-0.0.0.0}
 export FASTMCP_PORT=${FASTMCP_PORT:-9100}
 export OBP_BASE_URL=${OBP_BASE_URL:-https://apisandbox.openbankproject.com}
-export OBP_API_VERSION=${OBP_API_VERSION:-v7.0.0}
+export OBP_VERSION_TO_CALL=${OBP_VERSION_TO_CALL:-v7.0.0}
+export API_VERSION_OF_INTEREST=${API_VERSION_OF_INTEREST:-v7.0.0}
 
 # Parse command line arguments
 WATCH_MODE=false
@@ -41,7 +42,8 @@ echo "=========================================="
 echo "Host: $FASTMCP_HOST"
 echo "Port: $FASTMCP_PORT"
 echo "OBP Base URL: $OBP_BASE_URL"
-echo "OBP API Version: $OBP_API_VERSION"
+echo "OBP Version To Call: $OBP_VERSION_TO_CALL"
+echo "API Version Of Interest: $API_VERSION_OF_INTEREST"
 if [ "$WATCH_MODE" = true ]; then
     echo "Watch Mode: ENABLED (auto-reload on changes)"
 fi

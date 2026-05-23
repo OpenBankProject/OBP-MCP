@@ -5,6 +5,8 @@ import os
 import requests
 from typing import Dict, Any
 
+DEFAULT_API_VERSION = "v7.0.0"
+
 
 def get_obp_config(endpoint_type: str = "static", use_resource_docs: bool = True) -> Dict[str, str]:
     """
@@ -19,17 +21,21 @@ def get_obp_config(endpoint_type: str = "static", use_resource_docs: bool = True
         Dictionary with configuration including URLs for data fetching
     """
     base_url = os.getenv("OBP_BASE_URL")
-    api_version = os.getenv("OBP_API_VERSION")
-    
-    if not all([base_url, api_version]):
-        raise ValueError("Missing required environment variables: OBP_BASE_URL, OBP_API_VERSION")
-    
+    # Two distinct version axes: the version of the meta-endpoint we hit, and
+    # the requestedApiVersion that selects which endpoint catalog comes back.
+    version_to_call = os.getenv("OBP_VERSION_TO_CALL", DEFAULT_API_VERSION)
+    version_of_interest = os.getenv("API_VERSION_OF_INTEREST", DEFAULT_API_VERSION)
+
+    if not base_url:
+        raise ValueError("Missing required environment variable: OBP_BASE_URL")
+
     config = {
         "base_url": base_url,
-        "api_version": api_version,
-        "glossary_url": f"{base_url}/obp/{api_version}/api/glossary",
-        "swagger_url": f"{base_url}/obp/{api_version}/resource-docs/{api_version}/swagger?content={endpoint_type}",
-        "resource_docs_url": f"{base_url}/obp/{api_version}/resource-docs/{api_version}/obp?content={endpoint_type}",
+        "version_to_call": version_to_call,
+        "version_of_interest": version_of_interest,
+        "glossary_url": f"{base_url}/obp/{version_to_call}/api/glossary",
+        "swagger_url": f"{base_url}/obp/{version_to_call}/resource-docs/{version_of_interest}/swagger?content={endpoint_type}",
+        "resource_docs_url": f"{base_url}/obp/{version_to_call}/resource-docs/{version_of_interest}/obp?content={endpoint_type}",
     }
     
     # Set the primary data URL based on preference

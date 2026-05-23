@@ -16,6 +16,8 @@ from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
 import requests
 
+from .obp_utils import DEFAULT_API_VERSION
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,10 +37,11 @@ class DataHashManager:
         
         self.hash_storage_path = Path(hash_storage_path)
         self.base_url = os.getenv("OBP_BASE_URL")
-        self.api_version = os.getenv("OBP_API_VERSION")
-        
-        if not self.base_url or not self.api_version:
-            raise ValueError("OBP_BASE_URL and OBP_API_VERSION must be set in environment")
+        self.version_to_call = os.getenv("OBP_VERSION_TO_CALL", DEFAULT_API_VERSION)
+        self.version_of_interest = os.getenv("API_VERSION_OF_INTEREST", DEFAULT_API_VERSION)
+
+        if not self.base_url:
+            raise ValueError("OBP_BASE_URL must be set in environment")
     
     def check_obp_health(self) -> bool:
         """
@@ -47,7 +50,7 @@ class DataHashManager:
         Returns:
             True if OBP is healthy, False otherwise
         """
-        root_url = f"{self.base_url}/obp/{self.api_version}/root"
+        root_url = f"{self.base_url}/obp/{self.version_to_call}/root"
         try:
             response = requests.get(root_url, timeout=10)
             response.raise_for_status()
@@ -116,8 +119,8 @@ class DataHashManager:
         Returns:
             Dictionary with 'glossary' and 'endpoints' hashes
         """
-        glossary_url = f"{self.base_url}/obp/{self.api_version}/api/glossary"
-        swagger_url = f"{self.base_url}/obp/{self.api_version}/resource-docs/{self.api_version}/swagger?content={endpoint_type}"
+        glossary_url = f"{self.base_url}/obp/{self.version_to_call}/api/glossary"
+        swagger_url = f"{self.base_url}/obp/{self.version_to_call}/resource-docs/{self.version_of_interest}/swagger?content={endpoint_type}"
         
         try:
             # Fetch data

@@ -18,7 +18,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 OBP_BASE_URL=https://apisandbox.openbankproject.com
-OBP_API_VERSION=v7.0.0
+OBP_VERSION_TO_CALL=v7.0.0
+API_VERSION_OF_INTEREST=v7.0.0
 FASTMCP_HOST=127.0.0.1
 FASTMCP_PORT=9100
 ```

@@ -195,16 +195,32 @@ def get_endpoint_schema(endpoint_id: str) -> str:
     try:
         index = get_endpoint_index()
         schema = index.get_endpoint_schema(endpoint_id)
-        
+
         if not schema:
             return json.dumps({
                 "error": f"Endpoint '{endpoint_id}' not found",
                 "suggestion": "Use list_endpoints_by_tag() to find available endpoints"
             }, indent=2)
-        
-        # Serialize Pydantic model to dictionary
-        return json.dumps(schema.model_dump(by_alias=True), indent=2)
-        
+
+        # Prioritize actionable fields and drop empties/HTML so the LLM sees the
+        # example payload, required roles, and typed schema before the prose wall.
+        schema_dict = schema.model_dump(by_alias=True, exclude_defaults=True)
+        schema_dict.pop("description", None)  # HTML duplicate of description_markdown
+
+        priority = [
+            "operation_id", "path", "method", "summary", "roles",
+            "example_request_body", "typed_request_body",
+            "success_response_body", "typed_success_response_body",
+            "error_response_bodies",
+            "tags", "description_markdown",
+        ]
+        ordered = {k: schema_dict[k] for k in priority if k in schema_dict}
+        for k, v in schema_dict.items():
+            if k not in ordered:
+                ordered[k] = v
+
+        return json.dumps(ordered, indent=2)
+
     except Exception as e:
         logger.error(f"Error getting endpoint schema: {e}")
         return json.dumps({"error": str(e)}, indent=2)

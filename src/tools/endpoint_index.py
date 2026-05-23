@@ -8,7 +8,8 @@ separately and loaded on-demand.
 import os
 import json
 import logging
-from typing import Dict, List, Any, Optional
+import re
+from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 from enum import Enum
 
@@ -18,6 +19,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+_OBP_VERSION_RE = re.compile(r"OBPv?(\d+)\.(\d+)\.(\d+)")
+
+
+def _parse_obp_version(endpoint_id: str) -> Tuple[int, int, int]:
+    """Parse (major, minor, patch) from an OBP endpoint id like 'OBPv4.0.0-foo'.
+
+    Unversioned ids return a sentinel that sorts to the bottom under reverse=True.
+    """
+    m = _OBP_VERSION_RE.match(endpoint_id or "")
+    if m:
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    return (-1, -1, -1)
+
+
+def _sort_endpoints_by_version_desc(items: list) -> list:
+    """Stable sort: OBP version descending, id ascending as tie-breaker.
+
+    Accepts a list of EndpointSummary models or raw dicts — both expose an `id`.
+    """
+    def get_id(x: Any) -> str:
+        if isinstance(x, dict):
+            return x.get("id", "") or ""
+        return getattr(x, "id", "") or ""
+
+    items = sorted(items, key=get_id)
+    items.sort(key=lambda x: _parse_obp_version(get_id(x)), reverse=True)
+    return items
 
 
 # =============================================================================
@@ -509,26 +538,28 @@ class EndpointIndex:
         """
         if not tags:
             # Return all endpoints if no tags specified
-            return [
+            all_models = [
                 model for endpoint_id in self._index
                 if (model := self._get_summary_model(endpoint_id)) is not None
             ]
-        
+            return _sort_endpoints_by_version_desc(all_models)
+
         results: List[EndpointSummary] = []
         tags_lower = [tag.lower() for tag in tags]
-        
+
         for endpoint_id, endpoint in self._index.items():
             endpoint_tags = [t.lower() for t in endpoint.get("tags", [])]
-            
+
             # Check if any of the requested tags match
             if any(tag in endpoint_tags for tag in tags_lower):
                 model = self._get_summary_model(endpoint_id)
                 if model is not None:
                     results.append(model)
-        
+
+        results = _sort_endpoints_by_version_desc(results)
         logger.info(f"Found {len(results)} endpoints for tags: {tags}")
         return results
-    
+
     def list_endpoints_by_tag_raw(self, tags: List[str]) -> List[Dict[str, Any]]:
         """
         Get endpoints that match any of the provided tags (raw dict format).
@@ -541,18 +572,19 @@ class EndpointIndex:
         """
         if not tags:
             # Return all endpoints if no tags specified
-            return list(self._index.values())
-        
+            return _sort_endpoints_by_version_desc(list(self._index.values()))
+
         results = []
         tags_lower = [tag.lower() for tag in tags]
-        
+
         for endpoint in self._index.values():
             endpoint_tags = [t.lower() for t in endpoint.get("tags", [])]
-            
+
             # Check if any of the requested tags match
             if any(tag in endpoint_tags for tag in tags_lower):
                 results.append(endpoint)
-        
+
+        results = _sort_endpoints_by_version_desc(results)
         logger.info(f"Found {len(results)} endpoints for tags: {tags}")
         return results
     

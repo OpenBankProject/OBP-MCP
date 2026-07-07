@@ -125,6 +125,7 @@ async def build_status() -> dict[str, Any]:
             "version": "0.1.0",
             "uptime_seconds": round(time.time() - _START_TIME, 1),
             "base_url": os.getenv("BASE_URL") or None,
+            "public_base_url": os.getenv("PUBLIC_BASE_URL") or None,
         },
         "obp_api": {
             "base_url": obp_base_url or None,
@@ -264,7 +265,8 @@ def _render_html(data: dict[str, Any]) -> str:
       {row("Name", srv.get("name"))}
       {row("Version", srv.get("version"))}
       {row("Uptime", _fmt_uptime(srv.get("uptime_seconds", 0)))}
-      {row("Public base URL", srv.get("base_url"))}
+      {row("Base URL (BASE_URL)", srv.get("base_url"))}
+      {row("Public base URL (PUBLIC_BASE_URL)", srv.get("public_base_url"))}
     </table>
   </section>
 
@@ -303,19 +305,37 @@ def _render_html(data: dict[str, Any]) -> str:
 </html>"""
 
 
-def _server_base_url(request: Request) -> str:
-    """Public base URL of this server: BASE_URL env if set, else derived
-    from the incoming request (scheme://host[:port])."""
-    configured = os.getenv("BASE_URL", "").rstrip("/")
-    if configured:
-        return configured
-    return f"{request.url.scheme}://{request.url.netloc}"
+def _endpoint_urls(request: Request) -> tuple[str, str | None]:
+    """Resolve the MCP base URLs to advertise.
+
+    Returns (external, internal):
+    - external: what clients outside the cluster/network should use —
+      PUBLIC_BASE_URL if set, else BASE_URL, else derived from the request.
+    - internal: BASE_URL, only when PUBLIC_BASE_URL is also set and differs
+      (i.e. the server has distinct intra-cluster and public interfaces);
+      None otherwise.
+    """
+    base_url = os.getenv("BASE_URL", "").rstrip("/")
+    public_base_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+    external = public_base_url or base_url or f"{request.url.scheme}://{request.url.netloc}"
+    internal = base_url if public_base_url and base_url and base_url != public_base_url else None
+    return external, internal
 
 
 def _render_index_html(request: Request) -> str:
     esc = _html.escape
-    base_url = _server_base_url(request)
-    mcp_url = f"{base_url}/mcp"
+    external_base, internal_base = _endpoint_urls(request)
+    mcp_url = f"{external_base}/mcp"
+    internal_note = (
+        f"""
+    <h3>Internal (intra-cluster)</h3>
+    <p class="endpoint"><code>{esc(internal_base)}/mcp</code></p>
+    <p>Only reachable from inside the cluster/network — for internal agents
+    (e.g. Opey) and service-to-service clients.</p>"""
+        if internal_base
+        else ""
+    )
+    external_heading = "<h3>External (public)</h3>" if internal_base else ""
 
     auth_enabled = os.getenv("ENABLE_OAUTH", "false").lower() == "true"
     auth_provider = os.getenv("AUTH_PROVIDER", "none") if auth_enabled else "none"
@@ -383,8 +403,10 @@ def _render_index_html(request: Request) -> str:
 
   <section>
     <h2>MCP endpoint</h2>
+    {external_heading}
     <p class="endpoint"><code>{esc(mcp_url)}</code> (Streamable HTTP)</p>
     <p>{auth_note}</p>
+    {internal_note}
     {obp_line}
   </section>
 

@@ -23,6 +23,7 @@ services:
       AUTH_PROVIDER: ${AUTH_PROVIDER:-bearer-only}
       OBP_OIDC_ISSUER_URL: ${OBP_OIDC_ISSUER_URL:-}
       BASE_URL: ${BASE_URL:-http://localhost:9100}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
 
       # Python Configuration
       PYTHONUNBUFFERED: 1

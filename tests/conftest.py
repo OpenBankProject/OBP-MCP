@@ -11,6 +11,7 @@ def clean_env(monkeypatch):
         "ENABLE_OAUTH",
         "AUTH_PROVIDER",
         "BASE_URL",
+        "PUBLIC_BASE_URL",
         "KEYCLOAK_REALM_URL",
         "OBP_OIDC_ISSUER_URL",
         "JWKS_URI",

@@ -941,6 +941,11 @@ def get_auth_provider(
         return None
 
     # Get base URL
+    # TODO: OAuth discovery metadata (authorization_servers, DCR endpoint) is
+    # built from BASE_URL, which in a cluster may be the internal service URL.
+    # If OAuth is ever enabled for external clients behind a proxy/ingress,
+    # this should probably prefer PUBLIC_BASE_URL (see status.py) so clients
+    # are pointed at a URL they can actually reach.
     base_url = base_url or os.getenv("BASE_URL")
     if not base_url:
         raise ValueError("BASE_URL must be set when OAuth is enabled.")

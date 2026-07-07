@@ -296,10 +296,144 @@ def _render_html(data: dict[str, Any]) -> str:
 
   <footer>
     Generated at {esc(data["timestamp"])} ·
-    <a href="?format=json">JSON</a>
+    <a href="?format=json">JSON</a> ·
+    <a href="/">Home</a>
   </footer>
 </body>
 </html>"""
+
+
+def _server_base_url(request: Request) -> str:
+    """Public base URL of this server: BASE_URL env if set, else derived
+    from the incoming request (scheme://host[:port])."""
+    configured = os.getenv("BASE_URL", "").rstrip("/")
+    if configured:
+        return configured
+    return f"{request.url.scheme}://{request.url.netloc}"
+
+
+def _render_index_html(request: Request) -> str:
+    esc = _html.escape
+    base_url = _server_base_url(request)
+    mcp_url = f"{base_url}/mcp"
+
+    auth_enabled = os.getenv("ENABLE_OAUTH", "false").lower() == "true"
+    auth_provider = os.getenv("AUTH_PROVIDER", "none") if auth_enabled else "none"
+    if auth_enabled:
+        auth_note = (
+            f"OAuth 2.1 is required (provider: <code>{esc(auth_provider)}</code>). "
+            "MCP clients that support OAuth will be redirected to log in automatically."
+        )
+    else:
+        auth_note = "No authentication is required to connect (development mode)."
+
+    obp_base_url = os.getenv("OBP_BASE_URL", "").rstrip("/")
+    obp_line = (
+        f'<p>This server fronts the Open Bank Project API at <a href="{esc(obp_base_url)}">{esc(obp_base_url)}</a>.</p>'
+        if obp_base_url
+        else ""
+    )
+
+    claude_code_cmd = f"claude mcp add --transport http obp {mcp_url}"
+    vscode_json = f"""{{
+  "servers": {{
+    "obp": {{
+      "type": "http",
+      "url": "{mcp_url}"
+    }}
+  }}
+}}"""
+    mcp_remote_json = f"""{{
+  "mcpServers": {{
+    "obp": {{
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "{mcp_url}"]
+    }}
+  }}
+}}"""
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OBP-MCP — Open Bank Project MCP Server</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {{ color-scheme: light dark; }}
+  body {{ font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 900px; margin: 2rem auto; padding: 0 1rem; }}
+  h1 {{ margin-bottom: 0; }}
+  .sub {{ color: #888; font-size: 0.9em; margin-top: 0.25rem; }}
+  section {{ margin: 1.5rem 0; padding: 1rem; border: 1px solid #8884; border-radius: 6px; }}
+  section h2 {{ margin: 0 0 0.75rem; font-size: 1.1em; }}
+  section h3 {{ margin: 1rem 0 0.5rem; font-size: 1em; }}
+  pre {{ background: #8881; padding: 0.75rem; border-radius: 6px; overflow-x: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }}
+  code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #8881;
+         padding: 0.1em 0.3em; border-radius: 4px; }}
+  pre code {{ background: none; padding: 0; }}
+  .endpoint {{ font-size: 1.05em; }}
+  ul {{ padding-left: 1.25rem; }}
+  footer {{ margin: 2rem 0 1rem; color: #888; font-size: 0.85em; }}
+</style>
+</head>
+<body>
+  <h1>Open Bank Project MCP Server</h1>
+  <p class="sub">Model Context Protocol access to the Open Bank Project API</p>
+
+  <section>
+    <h2>MCP endpoint</h2>
+    <p class="endpoint"><code>{esc(mcp_url)}</code> (Streamable HTTP)</p>
+    <p>{auth_note}</p>
+    {obp_line}
+  </section>
+
+  <section>
+    <h2>Connect</h2>
+
+    <h3>Claude Code</h3>
+    <pre><code>{esc(claude_code_cmd)}</code></pre>
+
+    <h3>Claude.ai / Claude Desktop (custom connector)</h3>
+    <p>Add a custom connector in Settings &rarr; Connectors with the URL <code>{esc(mcp_url)}</code>.</p>
+
+    <h3>VS Code (<code>mcp.json</code>)</h3>
+    <pre><code>{esc(vscode_json)}</code></pre>
+
+    <h3>Clients without native remote MCP support (via <code>mcp-remote</code>)</h3>
+    <pre><code>{esc(mcp_remote_json)}</code></pre>
+  </section>
+
+  <section>
+    <h2>What you get</h2>
+    <ul>
+      <li><code>list_endpoints_by_tag</code> / <code>list_all_endpoint_tags</code> — discover OBP API endpoints by tag</li>
+      <li><code>get_endpoint_schema</code> — full request/response schema for an endpoint</li>
+      <li><code>call_obp_api</code> — execute calls against the OBP API</li>
+      <li><code>list_glossary_terms</code> / <code>get_glossary_term</code> — 800+ banking and OBP glossary terms</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Diagnostics</h2>
+    <ul>
+      <li><a href="/status">Status page</a> — configuration, connectivity checks, index freshness (<a href="/status?format=json">JSON</a>)</li>
+      <li><a href="/health">Health</a> — liveness probe</li>
+      <li><a href="/ready">Ready</a> — readiness probe</li>
+    </ul>
+  </section>
+
+  <footer>
+    <a href="https://github.com/OpenBankProject/OBP-MCP">OBP-MCP</a> ·
+    <a href="https://www.openbankproject.com/">Open Bank Project</a>
+  </footer>
+</body>
+</html>"""
+
+
+async def index_endpoint(request: Request) -> Response:
+    """Public index page: connectivity instructions and links to diagnostics."""
+    return HTMLResponse(_render_index_html(request))
 
 
 async def health_endpoint(request: Request) -> Response:

@@ -37,7 +37,7 @@ from database.obp_utils import DEFAULT_API_VERSION
 
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
-from mcp_server_obp.status import health_endpoint, ready_endpoint, status_endpoint
+from mcp_server_obp.status import health_endpoint, index_endpoint, ready_endpoint, status_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -626,9 +626,10 @@ def glossary_term(term_id: str) -> str:
 
 
 # ============================================================================
-# PUBLIC STATUS PAGE
+# PUBLIC INDEX AND STATUS PAGES
 # ============================================================================
 
+mcp.custom_route("/", methods=["GET"])(index_endpoint)
 mcp.custom_route("/status", methods=["GET"])(status_endpoint)
 mcp.custom_route("/health", methods=["GET"])(health_endpoint)
 mcp.custom_route("/ready", methods=["GET"])(ready_endpoint)

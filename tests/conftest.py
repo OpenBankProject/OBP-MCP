@@ -15,6 +15,8 @@ def clean_env(monkeypatch):
         "KEYCLOAK_REALM_URL",
         "OBP_OIDC_ISSUER_URL",
         "JWKS_URI",
+        "FASTMCP_HOST",
+        "ALLOW_UNAUTHENTICATED_PUBLIC",
     ]
     for var in auth_env_vars:
         monkeypatch.delenv(var, raising=False)

@@ -25,6 +25,8 @@ from src.mcp_server_obp.auth import (
     create_bearer_auth,
     get_auth_provider,
 )
+import logging
+from src.mcp_server_obp.lifespan import _warn_if_inbound_auth_missing
 
 
 class TestIssuerConfig:
@@ -515,3 +517,59 @@ class TestOBPOIDCAuthProvider:
         assert "/.well-known/oauth-authorization-server" in route_paths
         assert "/.well-known/openid-configuration" in route_paths
         assert "/register" in route_paths
+
+
+class TestWarnIfInboundAuthMissing:
+    """Startup check: warn (never fail) on a non-loopback bind without auth."""
+
+    @staticmethod
+    def _warnings(caplog):
+        return [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_loopback_without_auth_is_quiet(self, monkeypatch, caplog):
+        """Default loopback bind with auth disabled must not warn or raise."""
+        monkeypatch.setenv("FASTMCP_HOST", "127.0.0.1")
+        with caplog.at_level(logging.INFO):
+            _warn_if_inbound_auth_missing()  # must not raise
+        assert self._warnings(caplog) == []
+
+    def test_default_host_is_quiet(self, caplog):
+        """No FASTMCP_HOST set defaults to loopback, so no warning."""
+        with caplog.at_level(logging.INFO):
+            _warn_if_inbound_auth_missing()
+        assert self._warnings(caplog) == []
+
+    def test_public_bind_without_auth_warns(self, monkeypatch, caplog):
+        """0.0.0.0 with auth disabled must warn loudly but still start."""
+        monkeypatch.setenv("FASTMCP_HOST", "0.0.0.0")
+        with caplog.at_level(logging.WARNING):
+            _warn_if_inbound_auth_missing()  # must not raise
+        warnings = self._warnings(caplog)
+        assert warnings, "expected a security warning"
+        assert "NO client authentication" in warnings[0].getMessage()
+
+    def test_public_bind_with_oauth_provider_is_quiet(self, monkeypatch, caplog):
+        """0.0.0.0 with a real OAuth provider must not warn."""
+        monkeypatch.setenv("FASTMCP_HOST", "0.0.0.0")
+        monkeypatch.setenv("ENABLE_OAUTH", "true")
+        monkeypatch.setenv("AUTH_PROVIDER", "obp-oidc")
+        with caplog.at_level(logging.WARNING):
+            _warn_if_inbound_auth_missing()
+        assert self._warnings(caplog) == []
+
+    def test_public_bind_with_provider_none_warns(self, monkeypatch, caplog):
+        """ENABLE_OAUTH=true but AUTH_PROVIDER=none is still no auth -> warn."""
+        monkeypatch.setenv("FASTMCP_HOST", "0.0.0.0")
+        monkeypatch.setenv("ENABLE_OAUTH", "true")
+        monkeypatch.setenv("AUTH_PROVIDER", "none")
+        with caplog.at_level(logging.WARNING):
+            _warn_if_inbound_auth_missing()
+        assert self._warnings(caplog), "expected a warning when provider=none"
+
+    def test_public_bind_with_explicit_optout_is_quiet(self, monkeypatch, caplog):
+        """ALLOW_UNAUTHENTICATED_PUBLIC=true acknowledges and silences the warning."""
+        monkeypatch.setenv("FASTMCP_HOST", "0.0.0.0")
+        monkeypatch.setenv("ALLOW_UNAUTHENTICATED_PUBLIC", "true")
+        with caplog.at_level(logging.WARNING):
+            _warn_if_inbound_auth_missing()  # must not raise
+        assert self._warnings(caplog) == []

@@ -2,6 +2,16 @@
 
 MCP Server for the Open Bank Project API - enables AI assistants to interact with 600+ OBP API endpoints via tag-based routing and glossary access.
 
+## Architecture
+
+![How Opey, Claude Code and OBP-MCP call OBP-API](https://github.com/user-attachments/assets/d3ff5c10-7167-4034-98f7-c53a323bf985)
+
+Top to bottom: users reach OBP through the OBP-Portal / API Explorer II frontend, which talks to [Opey](https://github.com/OpenBankProject/OBP-Opey-II); Opey and external MCP clients (Claude Code, Claude Desktop, IDE agents) call OBP-MCP over MCP/HTTP; OBP-MCP makes the authenticated HTTPS calls to OBP-API, which in turn reaches core banking systems via its southbound connectors. OBP-OIDC issues and validates the tokens used at each hop. The numbered orange flow shows how user consent is obtained when a tool call requires a `Consent-JWT`: OBP-MCP returns `consent_required`, Opey surfaces it to the frontend as an SSE event, the frontend creates an implicit consent on OBP-API, and the tool call is retried with the `Consent-JWT` header.
+
+Opey also makes some direct (non-MCP) HTTP calls to OBP-API for its own infrastructure — session validation, admin operations, checkpoint persistence and health probes — covered by a separate detail diagram.
+
+The editable masters live in Lucidchart: [architecture overview](https://lucid.app/lucidchart/3ee12366-1269-49a9-9f6a-b2f5eb70d59a/edit) · [Opey direct-HTTP detail](https://lucid.app/lucidchart/fe000bca-db8e-4179-bf84-e80e79ba861e/edit). To update the image: edit the Lucid doc, export the page as PNG, upload it to a GitHub issue comment, and replace the `github.com/user-attachments/assets/...` URL here (and in the Opey README and the OBP-API glossary, which embed the same image).
+
 ## Quick Start
 
 ### Install uv

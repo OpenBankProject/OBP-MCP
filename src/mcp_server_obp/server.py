@@ -428,12 +428,15 @@ async def call_obp_api(
         
         try:
             result["response"] = response.json()
-            logging.info(f"OBP API call successful: {method} {url} - Status: {response.status_code}")
-            logging.info(f"Response: {json.dumps(result['response'], indent=2)[:500]}...")  # Log first 500 chars of response
-        except:
+            logger.info(f"OBP API call successful: {method} {url} - Status: {response.status_code}")
+            # The response body can contain the authenticated user's financial
+            # data / PII. Keep it at DEBUG so it is never written in normal
+            # (INFO) production logs — only when debugging is explicitly enabled.
+            logger.debug(f"Response: {json.dumps(result['response'], indent=2)[:500]}...")
+        except Exception:
             result["response"] = response.text
-            logging.info(f"OBP API call with non-JSON response: {method} {url} - Status: {response.status_code}")
-            logging.info(f"Response: {result['response'][:500]}...")  # Log first 500 chars of response
+            logger.info(f"OBP API call with non-JSON response: {method} {url} - Status: {response.status_code}")
+            logger.debug(f"Response: {result['response'][:500]}...")
         
         return json.dumps(result, indent=2)
         

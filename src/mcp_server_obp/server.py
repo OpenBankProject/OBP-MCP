@@ -332,7 +332,7 @@ async def call_obp_api(
                     logger.error("No access token available in context for OAuth authorization.")
                 else:
                     # TODO: Elicit a simple approval here to confirm tool use?
-                    request_headers["Authorization"] = f"Bearer {access_token}"
+                    request_headers["Authorization"] = f"Bearer {access_token.token}"
             case "consent":
                 consent_jwt = (headers or {}).get("Consent-JWT")
                 if not consent_jwt:

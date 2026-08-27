@@ -549,8 +549,19 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
     """OBP-OIDC authentication provider with native Dynamic Client Registration support.
 
     This provider integrates FastMCP with OBP-OIDC (Open Bank Project's OIDC server),
-    which has native support for Dynamic Client Registration (RFC 7591) and returns
-    the correct `token_endpoint_auth_method` value without any proxy workarounds.
+    which has native support for Dynamic Client Registration (RFC 7591).
+
+    The MCP server acts purely as an OAuth 2.1 resource server (RFC 9728): its
+    protected-resource metadata advertises OBP-OIDC as the authorization server,
+    and clients talk to OBP-OIDC directly for discovery, registration, login,
+    and tokens. No OAuth traffic is proxied through the MCP server.
+
+    Earlier versions advertised the MCP server itself as the authorization
+    server so a local proxy could strip null fields from OBP-OIDC's DCR
+    responses. That masquerade violated RFC 8414 (the metadata's `issuer` did
+    not match the URL it was served from) and strict clients such as OpenAI
+    Codex refused to connect. OBP-OIDC now omits unset fields from DCR
+    responses, so the proxy — and the masquerade — are gone.
 
     ## Features
 
@@ -621,146 +632,15 @@ class OBPOIDCAuthProvider(RemoteAuthProvider):
                 audience=audience,
             )
 
-        # Advertise ourselves as the authorization server so all discovery and DCR
-        # flows route through our proxy — this lets us fix incompatibilities in
-        # OBP-OIDC's responses (e.g. null fields in DCR) before they reach clients.
+        # Advertise OBP-OIDC — the real authorization server — in our
+        # protected-resource metadata (RFC 9728). Clients fetch AS metadata
+        # directly from OBP-OIDC, so its `issuer` matches the metadata URL as
+        # RFC 8414 requires, and register via OBP-OIDC's native DCR endpoint.
         super().__init__(
             token_verifier=token_verifier,
-            authorization_servers=[self.base_url],
+            authorization_servers=[AnyHttpUrl(self.issuer_url)],
             base_url=self.base_url,
         )
-
-    def get_routes(self, mcp_path: str | None = None) -> list[Route]:
-        """Get OAuth routes for OBP-OIDC.
-        
-        OBP-OIDC has native DCR support, but some MCP clients may still try to fetch
-        discovery documents from the resource server (FastMCP) rather than the 
-        authorization server (OBP-OIDC). We provide forwarding routes to handle this.
-        """
-        routes = super().get_routes(mcp_path)
-
-        async def forward_oauth_authorization_server_metadata(request):
-            """Forward OAuth authorization server metadata from OBP-OIDC."""
-            try:
-                async with httpx.AsyncClient() as client:
-                    # Try OAuth 2.0 authorization server metadata first
-                    response = await client.get(
-                        f"{self.issuer_url}/.well-known/oauth-authorization-server"
-                    )
-                    if response.status_code == 404:
-                        # Fall back to OIDC discovery
-                        response = await client.get(
-                            f"{self.issuer_url}/.well-known/openid-configuration"
-                        )
-                    response.raise_for_status()
-                    metadata = response.json()
-
-                    # Route DCR through our proxy so we can fix null fields
-                    base_url = str(self.base_url).rstrip("/")
-                    metadata["registration_endpoint"] = f"{base_url}/register"
-
-                    return JSONResponse(metadata)
-            except httpx.HTTPStatusError as e:
-                logger.error(f"Failed to fetch OBP-OIDC metadata: {e}")
-                logger.error(f"OBP-OIDC response body: {e.response.text}")
-                return JSONResponse(
-                    {"error": "server_error", "error_description": f"Failed to fetch OBP-OIDC metadata: {e}"},
-                    status_code=500,
-                )
-            except Exception as e:
-                logger.error(f"Failed to fetch OBP-OIDC metadata: {e}")
-                return JSONResponse(
-                    {"error": "server_error", "error_description": f"Failed to fetch OBP-OIDC metadata: {e}"},
-                    status_code=500,
-                )
-
-        async def forward_openid_configuration(request):
-            """Forward OIDC discovery document from OBP-OIDC."""
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{self.issuer_url}/.well-known/openid-configuration"
-                    )
-                    response.raise_for_status()
-                    metadata = response.json()
-
-                    # Route DCR through our proxy so we can fix null fields
-                    base_url = str(self.base_url).rstrip("/")
-                    metadata["registration_endpoint"] = f"{base_url}/register"
-
-                    return JSONResponse(metadata)
-            except httpx.HTTPStatusError as e:
-                logger.error(f"Failed to fetch OBP-OIDC openid-configuration: {e}")
-                logger.error(f"OBP-OIDC response body: {e.response.text}")
-                return JSONResponse(
-                    {"error": "server_error", "error_description": f"Failed to fetch OBP-OIDC discovery: {e}"},
-                    status_code=500,
-                )
-            except Exception as e:
-                logger.error(f"Failed to fetch OBP-OIDC openid-configuration: {e}")
-                return JSONResponse(
-                    {"error": "server_error", "error_description": f"Failed to fetch OBP-OIDC discovery: {e}"},
-                    status_code=500,
-                )
-
-        async def forward_register(request):
-            """Forward Dynamic Client Registration requests to OBP-OIDC."""
-            try:
-                body = await request.body()
-
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    forward_headers = {
-                        key: value
-                        for key, value in request.headers.items()
-                        if key.lower() not in {"host", "content-length", "transfer-encoding"}
-                    }
-                    forward_headers["Content-Type"] = "application/json"
-
-                    # OBP-OIDC's DCR endpoint
-                    registration_endpoint = f"{self.issuer_url}/connect/register"
-                    response = await client.post(registration_endpoint, content=body, headers=forward_headers)
-
-                    if not response.headers.get("content-type", "").startswith("application/json"):
-                        return JSONResponse({"error": "registration_failed"}, status_code=response.status_code)
-
-                    client_info = response.json()
-
-                    # Strip null values — OBP-OIDC returns nulls for optional fields
-                    # (client_uri, logo_uri, contacts) that strict clients expect to be
-                    # absent rather than null
-                    client_info = {k: v for k, v in client_info.items() if v is not None}
-
-                    return JSONResponse(client_info, status_code=response.status_code)
-
-            except Exception as e:
-                logger.error(f"DCR forward error: {e}")
-                return JSONResponse(
-                    {"error": "server_error", "error_description": f"Client registration failed: {e}"},
-                    status_code=500,
-                )
-
-        # Add forwarding routes at both paths:
-        # - With mcp_path suffix: for RFC 8414 path-aware discovery from MCP endpoint URL
-        # - Without suffix: for OASM discovery from authorization_servers URL (no path)
-        suffix = mcp_path or ""
-        routes.append(
-            Route(f"/.well-known/oauth-authorization-server{suffix}", endpoint=forward_oauth_authorization_server_metadata, methods=["GET"])
-        )
-        routes.append(
-            Route(f"/.well-known/openid-configuration{suffix}", endpoint=forward_openid_configuration, methods=["GET"])
-        )
-        if suffix:
-            routes.append(
-                Route("/.well-known/oauth-authorization-server", endpoint=forward_oauth_authorization_server_metadata, methods=["GET"])
-            )
-            routes.append(
-                Route("/.well-known/openid-configuration", endpoint=forward_openid_configuration, methods=["GET"])
-            )
-        routes.append(
-            Route("/register", endpoint=forward_register, methods=["POST"])
-        )
-
-        return routes
 
 
 def create_bearer_auth(

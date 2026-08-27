@@ -145,6 +145,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.oauth
 .envrc
 .venv
 env/
@@ -209,6 +210,9 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Local files that must never be committed
+DO_NOT_COMMIT/
 
 # Marimo
 marimo/_static/

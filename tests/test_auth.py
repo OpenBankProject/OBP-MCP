@@ -504,8 +504,23 @@ class TestOBPOIDCAuthProvider:
 
         assert provider.issuer_url == obp_oidc_issuer_url
 
-    def test_get_routes_includes_forwarding_endpoints(self, base_url, obp_oidc_issuer_url):
-        """Test that get_routes includes forwarding endpoints."""
+    def test_advertises_obp_oidc_as_authorization_server(self, base_url, obp_oidc_issuer_url):
+        """The protected-resource metadata must point at OBP-OIDC, not at
+        this server. Advertising ourselves while serving metadata whose
+        issuer is OBP-OIDC violates RFC 8414 and strict clients (e.g.
+        OpenAI Codex) refuse to connect."""
+        provider = OBPOIDCAuthProvider(
+            issuer_url=obp_oidc_issuer_url,
+            base_url=base_url,
+        )
+
+        advertised = [str(url).rstrip("/") for url in provider.authorization_servers]
+        assert advertised == [obp_oidc_issuer_url.rstrip("/")]
+        assert base_url.rstrip("/") not in advertised
+
+    def test_get_routes_has_no_proxy_endpoints(self, base_url, obp_oidc_issuer_url):
+        """No masquerade: only the RFC 9728 protected-resource metadata route
+        is served. Discovery and DCR happen directly against OBP-OIDC."""
         provider = OBPOIDCAuthProvider(
             issuer_url=obp_oidc_issuer_url,
             base_url=base_url,
@@ -514,9 +529,10 @@ class TestOBPOIDCAuthProvider:
         routes = provider.get_routes()
         route_paths = [route.path for route in routes]
 
-        assert "/.well-known/oauth-authorization-server" in route_paths
-        assert "/.well-known/openid-configuration" in route_paths
-        assert "/register" in route_paths
+        assert "/.well-known/oauth-protected-resource" in route_paths
+        assert "/.well-known/oauth-authorization-server" not in route_paths
+        assert "/.well-known/openid-configuration" not in route_paths
+        assert "/register" not in route_paths
 
 
 class TestWarnIfInboundAuthMissing:

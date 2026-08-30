@@ -120,17 +120,23 @@ class DataHashManager:
             Dictionary with 'glossary' and 'endpoints' hashes
         """
         glossary_url = f"{self.base_url}/obp/{self.version_to_call}/api/glossary"
-        swagger_url = f"{self.base_url}/obp/{self.version_to_call}/resource-docs/{self.version_of_interest}/swagger?content={endpoint_type}"
-        
+        # Hash the SAME document the index is generated from (resource-docs,
+        # see get_obp_config in obp_utils.py). Hashing the swagger variant
+        # instead misses changes: OBP-API generates and caches the two
+        # documents independently, so swagger can stay stale (e.g. dynamic
+        # description text like the self-service bank creation status) while
+        # resource-docs has already changed — and the refresh never fires.
+        resource_docs_url = f"{self.base_url}/obp/{self.version_to_call}/resource-docs/{self.version_of_interest}/obp?content={endpoint_type}"
+
         try:
             # Fetch data
             glossary_data = self._fetch_obp_data(glossary_url)
-            swagger_data = self._fetch_obp_data(swagger_url)
-            
+            resource_docs_data = self._fetch_obp_data(resource_docs_url)
+
             # Compute hashes
             hashes = {
                 "glossary": self._compute_hash(glossary_data),
-                "endpoints": self._compute_hash(swagger_data),
+                "endpoints": self._compute_hash(resource_docs_data),
                 "endpoint_type": endpoint_type
             }
             

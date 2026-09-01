@@ -276,7 +276,9 @@ async def call_obp_api(
         path_params: Dictionary of path parameters (e.g., {"BANK_ID": "gh.29.uk"})
         query_params: Dictionary of query parameters (e.g., {"limit": 10})
         body: Request body as dictionary (for POST/PUT requests)
-        headers: Additional HTTP headers (e.g., {"Authorization": "DirectLogin token=..."})
+        headers: Additional HTTP headers. Note: an Authorization header is honoured
+                 only in oauth mode; in consent mode it is stripped — OBP calls are
+                 authorized exclusively via the Consent-JWT header there.
     
     Returns:
         JSON string with API response or error details
@@ -324,6 +326,11 @@ async def call_obp_api(
         request_headers = headers or {}
         
         auth_method = os.getenv("OBP_AUTHORIZATION_VIA", "").lower()
+        # Auth contract (see OBP-Frontend/for_team_opey_mcp_auth_contract.md):
+        # the ingress bearer's only job is authenticating the CLIENT to this MCP
+        # server. It is read here — and only here — in oauth mode; consent mode
+        # must never let it (or any caller-supplied credential) reach OBP:
+        # whichever mode, drop the token you don't need.
         match auth_method:
             case "oauth":
                 logger.info("Using OAuth authorization method for OBP API call")
@@ -334,6 +341,15 @@ async def call_obp_api(
                     # TODO: Elicit a simple approval here to confirm tool use?
                     request_headers["Authorization"] = f"Bearer {access_token.token}"
             case "consent":
+                # Consent mode: user identity travels ONLY as a Consent-JWT. A
+                # caller-supplied Authorization header (the docstring's DirectLogin
+                # example, a forwarded bearer, anything) would bypass the consent's
+                # roles/views/TTL entirely — strip it, loudly.
+                if request_headers.pop("Authorization", None) is not None:
+                    logger.warning(
+                        "Dropped caller-supplied Authorization header: consent mode "
+                        "authorizes OBP calls via Consent-JWT only"
+                    )
                 consent_jwt = (headers or {}).get("Consent-JWT")
                 if not consent_jwt:
                     bank_id = (path_params or {}).get("BANK_ID") or (path_params or {}).get("bank_id")

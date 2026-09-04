@@ -495,3 +495,35 @@ class TestBuildFromResourceDocs:
         assert schema.roles[0].requires_bank_id is True
         assert schema.roles[1].role == "CanDoOtherThing"
         assert schema.roles[1].requires_bank_id is False
+
+
+class TestResourceDocPath:
+    """Dynamic entity docs carry a relative request_url; the callable path is specified_url."""
+
+    def test_static_endpoint_keeps_request_url(self):
+        from src.tools.endpoint_index import EndpointIndex
+        doc = {"request_url": "/obp/v6.0.0/banks", "specified_url": "/obp/v7.0.0/banks"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v6.0.0/banks"
+
+    def test_dynamic_entity_uses_specified_url(self):
+        from src.tools.endpoint_index import EndpointIndex
+        doc = {"request_url": "/obp_developer_faq", "specified_url": "/obp/dynamic-entity/obp_developer_faq"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/dynamic-entity/obp_developer_faq"
+
+    def test_relative_without_specified_url_is_left_alone(self):
+        from src.tools.endpoint_index import EndpointIndex
+        assert EndpointIndex._resource_doc_path({"request_url": "/something"}) == "/something"
+
+    def test_build_index_stores_callable_path(self):
+        from src.tools.endpoint_index import EndpointIndex
+        index = EndpointIndex.__new__(EndpointIndex)
+        index.build_index_from_resource_docs({"resource_docs": [{
+            "operation_id": "OBPv4.0.0-dynamicEntity_getobp_developer_faqList_",
+            "request_verb": "GET",
+            "request_url": "/obp_developer_faq",
+            "specified_url": "/obp/dynamic-entity/obp_developer_faq",
+            "summary": "Get Obp Developer Faq List",
+            "tags": ["_Obp_developer_faq"],
+        }]})
+        assert index._index["OBPv4.0.0-dynamicEntity_getobp_developer_faqList_"]["path"] == "/obp/dynamic-entity/obp_developer_faq"
+        assert index._schemas["OBPv4.0.0-dynamicEntity_getobp_developer_faqList_"]["path"] == "/obp/dynamic-entity/obp_developer_faq"

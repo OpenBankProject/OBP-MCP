@@ -37,6 +37,7 @@ from database.obp_utils import DEFAULT_API_VERSION
 
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
+from mcp_server_obp.consent_scope import my_resources_for
 from mcp_server_obp.status import health_endpoint, index_endpoint, ready_endpoint, status_endpoint
 
 logger = logging.getLogger(__name__)
@@ -400,6 +401,9 @@ async def call_obp_api(
                             "view_id": view_id,
                             "requires_view_access": requires_view_access,
                             "is_user_scoped": is_user_scoped,
+                            # The User's own resources this call needs the consent to list
+                            # (owned, not granted): today, personal dynamic entities.
+                            "my_resources": my_resources_for(endpoint.path, endpoint.method, bank_id),
                             "message": f"User consent is required to call {endpoint.operation_id}. "
                                        f"Please approve and provide a Consent-JWT.",
                         }, indent=2)

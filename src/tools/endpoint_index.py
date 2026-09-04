@@ -399,6 +399,26 @@ class EndpointIndex:
         self._save_schemas()
         self._schemas_loaded = True
     
+    @staticmethod
+    def _resource_doc_path(doc: Dict[str, Any]) -> str:
+        """
+        The path a client must call for a resource doc.
+
+        Static endpoints carry a full path in ``request_url`` (``/obp/v6.0.0/banks``).
+        Dynamic entity and dynamic endpoint docs carry only the entity-relative part
+        (``/obp_developer_faq``); the callable path is in ``specified_url``
+        (``/obp/dynamic-entity/obp_developer_faq``). Calling ``request_url`` for those
+        gives a 404 from the server root, so prefer ``specified_url`` whenever
+        ``request_url`` is not already an ``/obp/`` path.
+        """
+        request_url = str(doc.get("request_url") or "")
+        specified_url = str(doc.get("specified_url") or "")
+        if request_url.startswith("/obp/"):
+            return request_url
+        if specified_url.startswith("/obp/"):
+            return specified_url
+        return request_url
+
     def build_index_from_resource_docs(self, resource_docs_data: Dict[str, Any]) -> None:
         """
         Build the lightweight endpoint index and full schemas from OBP resource docs.
@@ -429,7 +449,7 @@ class EndpointIndex:
             # Extract fields from resource doc format
             operation_id = doc.get("operation_id", "")
             method = doc.get("request_verb", "GET").upper()
-            path = doc.get("request_url", "")
+            path = self._resource_doc_path(doc)
             summary = doc.get("summary", "")
             tags = doc.get("tags", [])
             

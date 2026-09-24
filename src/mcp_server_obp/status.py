@@ -67,11 +67,17 @@ def _inbound_auth() -> tuple[bool, str]:
     return enabled, (os.getenv("AUTH_PROVIDER", "none") if enabled else "none")
 
 
-def _inbound_note(enabled: bool, provider: str) -> str:
+def _inbound_note(enabled: bool, provider: str, mode_key: str) -> str:
     """Plain-English description of what a client needs to connect. Returns HTML."""
     esc = _html.escape
     if not enabled:
-        return "No login is needed."
+        note = "No token is needed to open a connection."
+        if mode_key == "consent":
+            note += (
+                " The user is authenticated on each call to OBP-API by their "
+                "<code>Consent-JWT</code> instead."
+            )
+        return note
     if provider == "bearer-only":
         return (
             "Clients must send a valid bearer token (JWT) to connect "
@@ -322,10 +328,10 @@ def _render_html(data: dict[str, Any]) -> str:
     if not issuer_sections and auth.get("enabled"):
         issuer_sections = '<p class="muted">No issuers configured.</p>'
     if not auth.get("enabled"):
-        issuer_sections = '<p class="muted">No login is needed to connect to this MCP server.</p>'
+        issuer_sections = '<p class="muted">No token is needed to open a connection to this MCP server.</p>'
 
     mode = _outbound_mode()
-    banner = _mode_banner_html(mode, _inbound_note(auth.get("enabled"), auth.get("provider")))
+    banner = _mode_banner_html(mode, _inbound_note(auth.get("enabled"), auth.get("provider"), mode["key"]))
 
     return f"""<!doctype html>
 <html lang="en">
@@ -380,7 +386,7 @@ def _render_html(data: dict[str, Any]) -> str:
     <table>
       {row("Mode (calls to OBP-API)", mode["label"])}
       {row("OBP_AUTHORIZATION_VIA", auth.get("outbound_auth_via"))}
-      {row("Login required to connect (ENABLE_OAUTH)", auth.get("enabled"))}
+      {row("Token required to connect (ENABLE_OAUTH)", auth.get("enabled"))}
       {row("Connect provider (AUTH_PROVIDER)", auth.get("provider"))}
     </table>
     {issuer_sections}
@@ -440,7 +446,7 @@ def _render_index_html(request: Request) -> str:
 
     auth_enabled, auth_provider = _inbound_auth()
     mode = _outbound_mode()
-    banner = _mode_banner_html(mode, _inbound_note(auth_enabled, auth_provider))
+    banner = _mode_banner_html(mode, _inbound_note(auth_enabled, auth_provider, mode["key"]))
 
     obp_base_url = os.getenv("OBP_BASE_URL", "").rstrip("/")
     obp_line = (

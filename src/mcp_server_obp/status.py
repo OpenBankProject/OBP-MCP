@@ -61,6 +61,101 @@ def _file_mtime_iso(path: Path) -> str | None:
     return None
 
 
+def _inbound_auth() -> tuple[bool, str]:
+    """(enabled, provider) for client-to-MCP authentication."""
+    enabled = os.getenv("ENABLE_OAUTH", "false").lower() == "true"
+    return enabled, (os.getenv("AUTH_PROVIDER", "none") if enabled else "none")
+
+
+def _inbound_note(enabled: bool, provider: str) -> str:
+    """Plain-English description of what a client needs to connect. Returns HTML."""
+    esc = _html.escape
+    if not enabled:
+        return "No login is needed."
+    if provider == "bearer-only":
+        return (
+            "Clients must send a valid bearer token (JWT) to connect "
+            f"(provider: <code>{esc(provider)}</code>). There is no interactive login flow."
+        )
+    return (
+        f"OAuth 2.1 login is required to connect (provider: <code>{esc(provider)}</code>). "
+        "MCP clients that support OAuth will be redirected to log in automatically."
+    )
+
+
+def _outbound_mode() -> dict[str, Any]:
+    """Describe how calls to OBP-API are authorized (OBP_AUTHORIZATION_VIA).
+
+    Returns key ("consent" | "oauth" | "disabled"), the raw env value, a short
+    label, a CSS class, and an HTML explanation.
+    """
+    raw = os.getenv("OBP_AUTHORIZATION_VIA", "").lower()
+    inbound_enabled, _ = _inbound_auth()
+    if raw == "consent":
+        return {
+            "key": "consent",
+            "raw": raw,
+            "label": "Consent mode",
+            "css": "mode-consent",
+            "explain": (
+                "Every call to OBP-API is authorized by a <code>Consent-JWT</code> that the "
+                "MCP client sends with the request. Any <code>Authorization</code> header "
+                "from the client is dropped. Calls to non-public endpoints without a "
+                "Consent-JWT return <code>consent_required</code>, so this server is meant "
+                "for clients that can create consents, such as Opey."
+            ),
+        }
+    if raw == "oauth":
+        explain = (
+            "Every call to OBP-API is made with the OAuth access token the user logged "
+            "in to this MCP server with. Works with any MCP client that supports OAuth "
+            "(Claude Code, Claude.ai, VS Code, …)."
+        )
+        if not inbound_enabled:
+            explain += (
+                " <strong>Warning:</strong> login to this MCP server is switched off, so "
+                "there is no user token and calls to OBP-API will be sent without one."
+            )
+        return {"key": "oauth", "raw": raw, "label": "OAuth mode", "css": "mode-oauth", "explain": explain}
+    return {
+        "key": "disabled",
+        "raw": raw or None,
+        "label": "OBP-API calls disabled",
+        "css": "mode-disabled",
+        "explain": (
+            "<code>OBP_AUTHORIZATION_VIA</code> is not set to <code>oauth</code> or "
+            "<code>consent</code>, so <code>call_obp_api</code> refuses every request. "
+            "Discovery and glossary tools still work."
+        ),
+    }
+
+
+_MODE_BANNER_CSS = """
+  .mode { margin: 1.25rem 0; padding: 0.9rem 1rem; border-radius: 6px; border-left: 6px solid; background: #8881; }
+  .mode .name { font-size: 1.35em; font-weight: 700; margin: 0; }
+  .mode .var { color: #888; font-size: 0.85em; margin: 0.15rem 0 0.5rem; }
+  .mode p { margin: 0.35rem 0; }
+  .mode-consent { border-color: #7b3fbf; }
+  .mode-consent .name { color: #7b3fbf; }
+  .mode-oauth { border-color: #1f6fd1; }
+  .mode-oauth .name { color: #1f6fd1; }
+  .mode-disabled { border-color: #c0392b; }
+  .mode-disabled .name { color: #c0392b; }
+"""
+
+
+def _mode_banner_html(mode: dict[str, Any], inbound_note: str) -> str:
+    esc = _html.escape
+    raw = mode["raw"] if mode["raw"] is not None else "(not set)"
+    return f"""
+  <div class="mode {mode['css']}">
+    <p class="name">{esc(mode['label'])}</p>
+    <p class="var">OBP_AUTHORIZATION_VIA={esc(raw)} · how calls to OBP-API are authorized</p>
+    <p>{mode['explain']}</p>
+    <p><strong>Connecting to this MCP server:</strong> {inbound_note}</p>
+  </div>"""
+
+
 async def build_status() -> dict[str, Any]:
     # Deferred imports — the indexes load lazily and we don't want /status
     # to pay that cost on the first hit if it's cold.
@@ -70,8 +165,7 @@ async def build_status() -> dict[str, Any]:
     obp_base_url = os.getenv("OBP_BASE_URL", "").rstrip("/")
     obp_version_to_call = os.getenv("OBP_VERSION_TO_CALL", DEFAULT_API_VERSION)
     obp_version_of_interest = os.getenv("API_VERSION_OF_INTEREST", DEFAULT_API_VERSION)
-    auth_enabled = os.getenv("ENABLE_OAUTH", "false").lower() == "true"
-    auth_provider = os.getenv("AUTH_PROVIDER", "none") if auth_enabled else "none"
+    auth_enabled, auth_provider = _inbound_auth()
     outbound_auth_via = os.getenv("OBP_AUTHORIZATION_VIA", "").lower() or None
 
     issuers: list[dict[str, Any]] = []
@@ -137,6 +231,7 @@ async def build_status() -> dict[str, Any]:
             "enabled": auth_enabled,
             "provider": auth_provider,
             "outbound_auth_via": outbound_auth_via,
+            "mode": _outbound_mode()["key"],
             "issuers": issuers,
         },
         "index": {
@@ -227,13 +322,16 @@ def _render_html(data: dict[str, Any]) -> str:
     if not issuer_sections and auth.get("enabled"):
         issuer_sections = '<p class="muted">No issuers configured.</p>'
     if not auth.get("enabled"):
-        issuer_sections = '<p class="muted">OAuth is disabled.</p>'
+        issuer_sections = '<p class="muted">No login is needed to connect to this MCP server.</p>'
+
+    mode = _outbound_mode()
+    banner = _mode_banner_html(mode, _inbound_note(auth.get("enabled"), auth.get("provider")))
 
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>OBP-MCP status</title>
+<title>OBP-MCP status — {esc(mode['label'])}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root {{ color-scheme: light dark; }}
@@ -253,11 +351,13 @@ def _render_html(data: dict[str, Any]) -> str:
   .muted {{ color: #888; }}
   footer {{ margin: 2rem 0 1rem; color: #888; font-size: 0.85em; }}
   a {{ color: inherit; }}
+{_MODE_BANNER_CSS}
 </style>
 </head>
 <body>
   <h1>OBP-MCP status</h1>
   <p class="sub">{esc(srv['name'])} v{esc(srv['version'])} · up {esc(_fmt_uptime(srv['uptime_seconds']))}</p>
+{banner}
 
   <section>
     <h2>Server</h2>
@@ -278,9 +378,10 @@ def _render_html(data: dict[str, Any]) -> str:
   <section>
     <h2>Authentication</h2>
     <table>
-      {row("OAuth enabled (inbound)", auth.get("enabled"))}
-      {row("Inbound provider", auth.get("provider"))}
-      {row("Outbound to OBP-API (OBP_AUTHORIZATION_VIA)", auth.get("outbound_auth_via"))}
+      {row("Mode (calls to OBP-API)", mode["label"])}
+      {row("OBP_AUTHORIZATION_VIA", auth.get("outbound_auth_via"))}
+      {row("Login required to connect (ENABLE_OAUTH)", auth.get("enabled"))}
+      {row("Connect provider (AUTH_PROVIDER)", auth.get("provider"))}
     </table>
     {issuer_sections}
   </section>
@@ -337,20 +438,23 @@ def _render_index_html(request: Request) -> str:
     )
     external_heading = "<h3>External (public)</h3>" if internal_base else ""
 
-    auth_enabled = os.getenv("ENABLE_OAUTH", "false").lower() == "true"
-    auth_provider = os.getenv("AUTH_PROVIDER", "none") if auth_enabled else "none"
-    if auth_enabled:
-        auth_note = (
-            f"OAuth 2.1 is required (provider: <code>{esc(auth_provider)}</code>). "
-            "MCP clients that support OAuth will be redirected to log in automatically."
-        )
-    else:
-        auth_note = "No authentication is required to connect (development mode)."
+    auth_enabled, auth_provider = _inbound_auth()
+    mode = _outbound_mode()
+    banner = _mode_banner_html(mode, _inbound_note(auth_enabled, auth_provider))
 
     obp_base_url = os.getenv("OBP_BASE_URL", "").rstrip("/")
     obp_line = (
         f'<p>This server fronts the Open Bank Project API at <a href="{esc(obp_base_url)}">{esc(obp_base_url)}</a>.</p>'
         if obp_base_url
+        else ""
+    )
+
+    consent_connect_note = (
+        '<p><strong>This server is in Consent mode.</strong> The clients below can connect '
+        'and use the discovery and glossary tools, but <code>call_obp_api</code> will return '
+        '<code>consent_required</code> for non-public endpoints unless the client supplies a '
+        '<code>Consent-JWT</code>. For general use with these clients, use a server in OAuth mode.</p>'
+        if mode["key"] == "consent"
         else ""
     )
 
@@ -376,7 +480,7 @@ def _render_index_html(request: Request) -> str:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>OBP-MCP — Open Bank Project MCP Server</title>
+<title>OBP-MCP — {esc(mode['label'])}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root {{ color-scheme: light dark; }}
@@ -395,23 +499,25 @@ def _render_index_html(request: Request) -> str:
   .endpoint {{ font-size: 1.05em; }}
   ul {{ padding-left: 1.25rem; }}
   footer {{ margin: 2rem 0 1rem; color: #888; font-size: 0.85em; }}
+{_MODE_BANNER_CSS}
 </style>
 </head>
 <body>
   <h1>Open Bank Project MCP Server</h1>
   <p class="sub">Model Context Protocol access to the Open Bank Project API</p>
+{banner}
 
   <section>
     <h2>MCP endpoint</h2>
     {external_heading}
     <p class="endpoint"><code>{esc(mcp_url)}</code> (Streamable HTTP)</p>
-    <p>{auth_note}</p>
     {internal_note}
     {obp_line}
   </section>
 
   <section>
     <h2>Connect</h2>
+    {consent_connect_note}
 
     <h3>Claude Code</h3>
     <pre><code>{esc(claude_code_cmd)}</code></pre>

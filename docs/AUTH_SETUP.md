@@ -11,32 +11,37 @@ If you simply want to test if the server is working, without any particular view
 
 ### Bearer Auth Config (Opey Setup)
 
-**Use Case: Internal systems that can delegate the authentication to the user-agent. i.e. Opey running behind the OBP-Portal**
+**Use Case: Internal systems such as Opey running behind the OBP-Portal, using Consent mode (`OBP_AUTHORIZATION_VIA="consent"`).**
+
+Two identities travel separately:
+
+- **Which service is calling** — Opey's own client-credentials token from OBP-OIDC, sent as `Authorization: Bearer` when connecting to OBP-MCP. OBP-MCP validates it via JWKS.
+- **On whose behalf** — the user's `Consent-JWT`, sent by Opey with each tool call. OBP-MCP forwards only this (plus `Consumer-Key`) to OBP-API.
+
+The user's own OAuth access token stays with the Portal and never reaches OBP-MCP.
 
 ```
-    ┌──────────────┐     OAuth Flow      ┌──────────────┐
-    │   Browser    │────────────────────▶│  OBP-OIDC    │
-    │  (Frontend)  │◀────────────────────│  (IdP)       │
-    └──────┬───────┘    access_token     └──────┬───────┘
-           │                                    │
-           │ HTTP Request                       │
-           │ Authorization: Bearer <token>      │
-           ▼                                    │
-    ┌──────────────┐                            │
-    │  Your Agent  │                            │
-    │  (Backend)   │                            │
-    └──────┬───────┘                            │
-           │                                    │
-           │ MCP Protocol                       │
-           │ Authorization: Bearer <token>      │
-           ▼                                    │
-    ┌──────────────┐    Validate via JWKS       │
-    │  OBP-MCP     │────────────────────────────┘
+    ┌──────────────┐  client_credentials  ┌──────────────┐
+    │    Opey      │─────────────────────▶│  OBP-OIDC    │
+    │  (Backend)   │◀─────────────────────│  (IdP)       │
+    └──────┬───────┘   service token      └──────┬───────┘
+           │                                     │
+           │ MCP Protocol                        │
+           │ Authorization: Bearer <service token>
+           │ tool call headers: Consent-JWT      │
+           ▼                                     │
+    ┌──────────────┐    Validate via JWKS        │
+    │  OBP-MCP     │─────────────────────────────┘
     │  Server      │
+    └──────┬───────┘
+           │ Consent-JWT + Consumer-Key (no Authorization header)
+           ▼
+    ┌──────────────┐
+    │   OBP-API    │
     └──────────────┘
 ```
 
-For this you must set your environemnt to.
+OBP-MCP environment:
 > Note that you must set one or both of the `KEYCLOAK_REALM_URL` or `OBP_OIDC_ISSUER_URL` and the MCP server will intelligently route to the right provider in order to verify the bearer token.
 ```
 ENABLE_OAUTH=true
@@ -45,6 +50,9 @@ AUTH_PROVIDER=bearer-only
 
 KEYCLOAK_REALM_URL="Your keycloak realm url"
 OBP_OIDC_ISSUER_URL="Your OBP-OIDC url"
+
+OBP_AUTHORIZATION_VIA="consent"
+OBP_OPEY_CONSUMER_KEY="Opey's OBP consumer key"
 ```
 
 Then in Opey's `mcp_servers.json`:
@@ -55,11 +63,17 @@ Then in Opey's `mcp_servers.json`:
       "name": "obp",
       "url": "http://0.0.0.0:9100/mcp",
       "transport": "http",
-      "requires_auth": true
+      "use_service_token": true
     }
   ]
 }
 ```
+
+and in Opey's `.env`: `OPEY_OIDC_TOKEN_URL`, `OPEY_OIDC_CLIENT_ID` and `OPEY_OIDC_CLIENT_SECRET`.
+
+> **Known gap:** `bearer-only` requires the scopes `openid`, `profile` and `email` by default. Opey requests its service token without a `scope`, so OBP-OIDC issues it with an empty scope and OBP-MCP rejects it. Until that is resolved, run locally with `ENABLE_OAUTH=false`; OBP calls are still protected by the Consent-JWT.
+
+The older `"requires_auth": true` / `"forward_bearer_token": true` settings forwarded the user's own token to OBP-MCP. Don't use them with Consent mode.
 
 ### Keycloak and OBP-OIDC Providers
 

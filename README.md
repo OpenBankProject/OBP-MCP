@@ -52,7 +52,22 @@ Server starts at `http://0.0.0.0:9100`
 
 ## Authentication
 
-OBP-MCP supports three authentication modes:
+Two separate settings control auth. Don't mix them up — both can involve OAuth:
+
+| Setting | Controls | Values |
+| --- | --- | --- |
+| `AUTH_PROVIDER` (with `ENABLE_OAUTH`) | How a client **connects to this MCP server** | `bearer-only`, `obp-oidc`, `keycloak`, or off |
+| `OBP_AUTHORIZATION_VIA` | How this server's **calls to OBP-API** are authorized | `consent` (**Consent mode**) or `oauth` (**OAuth mode**) |
+
+- **Consent mode** — every call to OBP-API carries a `Consent-JWT` supplied by the client with the tool call. Any `Authorization` header from the client is dropped. Without a Consent-JWT, calls to non-public endpoints return `consent_required`. Use this for Opey.
+- **OAuth mode** — every call to OBP-API carries the OAuth access token the user logged in to this MCP server with. Use this for Claude Code, Claude Desktop, VS Code and other general MCP clients.
+- Any other value (including unset): the server starts, logs a prominent warning, and `call_obp_api` refuses every request.
+
+The server's home page (`/`) and `/status` page show which mode it is in at the top, and `/status?format=json` reports it as `auth.mode`.
+
+### Connecting to the MCP server
+
+OBP-MCP supports three connection authentication providers:
 
 | Mode            | Use Case                                       | `AUTH_PROVIDER` |
 | --------------- | ---------------------------------------------- | --------------- |
@@ -60,9 +75,9 @@ OBP-MCP supports three authentication modes:
 | **obp-oidc**    | External MCP clients (VS Code, Claude Desktop) | `obp-oidc`      |
 | **keycloak**    | External MCP clients with Keycloak             | `keycloak`      |
 
-### For Opey (Internal Agent)
+#### For Opey (Internal Agent)
 
-Use `bearer-only` authentication. This mode:
+Use `bearer-only` authentication together with Consent mode (full setup in [Appendix 1](#appendix-1---opey-setup)). This mode:
 
 - **Does NOT** expose OAuth discovery endpoints
 - Simply validates JWT tokens against OBP-OIDC's JWKS
@@ -73,15 +88,16 @@ Use `bearer-only` authentication. This mode:
 ENABLE_OAUTH="true"
 AUTH_PROVIDER=bearer-only
 OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
+OBP_AUTHORIZATION_VIA="consent"
 ```
 
-Your agent passes the user's access token with each MCP request:
+Opey authenticates to the MCP server with **its own** client-credentials token, not the user's token. The user's identity travels only in the per-call `Consent-JWT`:
 
 ```
-Authorization: Bearer <user_access_token>
+Authorization: Bearer <Opey's client-credentials token>
 ```
 
-### For External MCP Clients (VS Code, Claude Desktop, MCP Inspector)
+#### For External MCP Clients (VS Code, Claude Desktop, MCP Inspector)
 
 Use `obp-oidc` or `keycloak` authentication. These modes expose the full OAuth 2.1 discovery flow, allowing MCP clients to:
 
@@ -97,13 +113,15 @@ OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
 BASE_URL=http://localhost:9100
 ```
 
-### Disabling Authentication
+#### Disabling Authentication
 
 For development or testing without authentication:
 
 ```bash
 ENABLE_OAUTH="false"
 ```
+
+This only turns off login for connecting to the MCP server. Calls to OBP-API still follow `OBP_AUTHORIZATION_VIA`. Note that OAuth mode with login turned off has no user token to send, so OBP-API calls go out without one.
 
 for more information about auth and how to configure your OIDC providers see the [docs](docs/AUTH_SETUP.md).
 
@@ -189,10 +207,11 @@ See [docs/HYBRID_ROUTING.md](docs/HYBRID_ROUTING.md) for details.
 
 ## Appendix 1 - Opey setup
 
-To set up with opey, use the following setup:
+Opey-II uses **Consent mode**. Opey authenticates to OBP-MCP with its own client-credentials token (service identity), and passes the user's `Consent-JWT` with each tool call (user identity). The user's own OAuth token never reaches OBP-MCP.
+
+OBP-MCP `.env`:
 
 ```bash
-# .env
 ENABLE_OAUTH="true"
 AUTH_PROVIDER=bearer-only
 OBP_OIDC_ISSUER_URL=http://localhost:9000/obp-oidc
@@ -200,19 +219,30 @@ OBP_AUTHORIZATION_VIA="consent"
 OBP_OPEY_CONSUMER_KEY=<opey's consumer key (same as the OBP_CONSUMER_KEY in Opey)>
 ```
 
-> [!IMPORTANT] `OBP_AUTHORIZATION_VIA` must be set to `oauth` or `consent`. Any other value (including unset) causes the server to refuse to start — unauthenticated OBP-API access is not supported.
-
-> [!NOTE] You will not be able to use the MCP server, set up in this way, with any other MCP clients, unless they are capable of creating valid consents on the fly.
-
 In Opey's `mcp_servers.json` (inside the servers array):
+
 ```json
 {
       "name": "obp",
       "url": "http://0.0.0.0:9100/mcp",
-      "transport": "streamable_http",
-      "forward_bearer_token": true
+      "transport": "http",
+      "use_service_token": true
 }
 ```
+
+And in Opey's `.env`, the credentials Opey uses to get its service token from OBP-OIDC (all three are required, otherwise Opey sends no `Authorization` header):
+
+```bash
+OPEY_OIDC_TOKEN_URL=http://localhost:9000/obp-oidc/token
+OPEY_OIDC_CLIENT_ID=<opey's OIDC client id>
+OPEY_OIDC_CLIENT_SECRET=<opey's OIDC client secret>
+```
+
+> [!NOTE] `forward_bearer_token: true` (which forwarded the user's own OAuth token to OBP-MCP) is the older setup and should no longer be used with Consent mode. In Consent mode OBP-MCP ignores that token for OBP calls anyway.
+
+> [!WARNING] `bearer-only` requires the scopes `openid`, `profile` and `email` in every token by default. Opey currently requests its client-credentials token without a `scope` parameter, and OBP-OIDC then issues it with an empty scope, so OBP-MCP will reject it. Until that is resolved, a local setup can run with `ENABLE_OAUTH="false"` (no login needed to connect; OBP calls are still protected by the Consent-JWT).
+
+> [!NOTE] A server in Consent mode is not useful to general MCP clients (Claude Code, VS Code, …): they can connect and use the discovery and glossary tools, but `call_obp_api` returns `consent_required` because they can't create consents. Run a second instance in OAuth mode for those clients.
 
 ## License
 

@@ -14,6 +14,9 @@ from typing import Any, Optional
 ACTION_READ = "read"
 ACTION_WRITE = "write"
 
+# The bank_id OBP uses for the system space: a dynamic entity whose URL has no banks/BANK_ID segment.
+SYSTEM_SPACE_BANK_ID = "SYS"
+
 # /obp/dynamic-entity/my/ENTITY[/ID]  or  /obp/dynamic-entity/banks/BANK_ID/my/ENTITY[/ID]
 _PERSONAL_DYNAMIC_ENTITY = re.compile(r"^/obp/dynamic-entity/(banks/[^/]+/)?my/([^/]+)")
 
@@ -23,14 +26,18 @@ def my_resources_for(path: Optional[str], method: Optional[str], bank_id: Option
 
     Only personal dynamic entity endpoints need one today. GET needs `read`; every other
     method needs `write`. `bank_id` is used only for bank-level entities (a `banks/BANK_ID`
-    segment in the path); system-level entities carry an empty bank_id.
+    segment in the path); system-level entities carry the system space's bank_id, SYS.
     """
     match = _PERSONAL_DYNAMIC_ENTITY.match(path or "")
     if not match:
         return None
     verb = str(getattr(method, "value", method) or "").upper()
     action = ACTION_READ if verb == "GET" else ACTION_WRITE
-    entity_bank_id = (bank_id or "") if match.group(1) else ""
+    if match.group(1) and not bank_id:
+        # A bank-level entity with no bank named. OBP reads an empty bank_id as the system space,
+        # so sending one would ask for the system entity of the same name; ask for nothing instead.
+        return None
+    entity_bank_id = bank_id if match.group(1) else SYSTEM_SPACE_BANK_ID
     return {
         "personal_dynamic_entities": [
             {"bank_id": entity_bank_id, "entity_name": match.group(2), "actions": [action]}

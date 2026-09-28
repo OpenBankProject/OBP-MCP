@@ -6,7 +6,7 @@ from src.mcp_server_obp.consent_scope import my_resources_for
 def test_system_level_personal_entity_read():
     assert my_resources_for("/obp/dynamic-entity/my/customer_preferences", "GET", None) == {
         "personal_dynamic_entities": [
-            {"bank_id": "", "entity_name": "customer_preferences", "actions": ["read"]}
+            {"bank_id": "SYS", "entity_name": "customer_preferences", "actions": ["read"]}
         ]
     }
 
@@ -15,7 +15,7 @@ def test_system_level_personal_entity_write_ignores_bank_id():
     out = my_resources_for("/obp/dynamic-entity/my/customer_preferences/CUSTOMER_PREFERENCES_ID", "PUT", "some-bank")
     assert out == {
         "personal_dynamic_entities": [
-            {"bank_id": "", "entity_name": "customer_preferences", "actions": ["write"]}
+            {"bank_id": "SYS", "entity_name": "customer_preferences", "actions": ["write"]}
         ]
     }
 
@@ -32,6 +32,11 @@ def test_non_personal_paths_need_nothing():
     assert my_resources_for("/obp/dynamic-entity/community/customer_preferences", "GET", None) is None
     assert my_resources_for("/obp/v6.0.0/my/accounts", "GET", None) is None
     assert my_resources_for(None, None, None) is None
+
+
+def test_bank_level_entity_without_a_bank_id_needs_nothing():
+    # An empty bank_id would name the system space, so no entry is better than the wrong one.
+    assert my_resources_for("/obp/dynamic-entity/banks/BANK_ID/my/notes", "GET", None) is None
 
 
 def test_method_may_be_an_enum_like_object():

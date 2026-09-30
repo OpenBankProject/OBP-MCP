@@ -38,6 +38,7 @@ from database.obp_utils import DEFAULT_API_VERSION
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
 from mcp_server_obp.consent_scope import my_resources_for
+from mcp_server_obp.forwarded_for import headers_for_obp
 from mcp_server_obp.status import health_endpoint, index_endpoint, ready_endpoint, status_endpoint
 
 logger = logging.getLogger(__name__)
@@ -280,6 +281,9 @@ async def call_obp_api(
         headers: Additional HTTP headers. Note: an Authorization header is honoured
                  only in oauth mode; in consent mode it is stripped — OBP calls are
                  authorized exclusively via the Consent-JWT header there.
+                 X-Forwarded-For is the chain of client addresses so far; this server
+                 appends the address of whoever called it before sending it on.
+                 X-Real-IP and Forwarded are removed.
     
     Returns:
         JSON string with API response or error details
@@ -324,7 +328,9 @@ async def call_obp_api(
         
         # Prepare request
         method = endpoint.method  # HttpMethod enum value
-        request_headers = headers or {}
+        # A new dictionary: the caller's headers (and the mutable default) stay unchanged.
+        # Client address headers are rebuilt here; see forwarded_for.py.
+        request_headers = headers_for_obp(headers)
         
         auth_method = os.getenv("OBP_AUTHORIZATION_VIA", "").lower()
         # Auth contract (see OBP-Frontend/for_team_opey_mcp_auth_contract.md):
@@ -672,4 +678,8 @@ if __name__ == "__main__":
         stateless_http=True,
         host=os.getenv("FASTMCP_HOST", "127.0.0.1"),
         port=int(os.getenv("FASTMCP_PORT", "9100")),
+        # Keep request.client as the real socket peer. With proxy headers on, Uvicorn
+        # would replace it with an address taken from X-Forwarded-For whenever the peer
+        # is 127.0.0.1, and that address is appended to the chain sent to OBP-API.
+        uvicorn_config={"proxy_headers": False},
     )

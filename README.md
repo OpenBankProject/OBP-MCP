@@ -244,6 +244,20 @@ OPEY_OIDC_CLIENT_SECRET=<opey's OIDC client secret>
 
 > [!NOTE] A server in Consent mode is not useful to general MCP clients (Claude Code, VS Code, …): they can connect and use the discovery and glossary tools, but `call_obp_api` returns `consent_required` because they can't create consents. Run a second instance in OAuth mode for those clients.
 
+## Appendix 2 - End user addresses (X-Forwarded-For)
+
+OBP-API applies per-address rate limits and penalties to the address of whoever calls it. So that it sees the end user rather than this server, every hop in front of OBP-API appends to `X-Forwarded-For` the address it received the request from. OBP-MCP sends on the `X-Forwarded-For` the MCP client put in the tool call's `headers`, followed by the `X-Forwarded-For` of the MCP HTTP request (set by a proxy in front of OBP-MCP, if there is one) and the TCP peer of that request. It removes any `X-Real-IP` or `Forwarded` the caller supplied. Over the stdio transport there is no peer to vouch for the chain, so no `X-Forwarded-For` is sent.
+
+OBP-API reads the chain from the right and skips the addresses it trusts, so the first address it does not trust is the client. For the chain to be believed, OBP-API's props must list this server's address, and every hop in front of it (for example NGINX, API Explorer II and Opey):
+
+```properties
+trust.proxy.enabled=true
+trust.proxy.header=X-Forwarded-For
+trust.proxy.peers=<OBP-MCP address>, <Opey address>, <API Explorer II address>, <NGINX address>
+```
+
+An MCP client that is not in that list becomes the client itself, so it cannot name another address. OBP-MCP starts Uvicorn with `proxy_headers` turned off so that the TCP peer it appends is the real socket peer.
+
 ## License
 
 AGPLv3

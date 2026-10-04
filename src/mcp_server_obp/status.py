@@ -337,7 +337,7 @@ def _render_html(data: dict[str, Any]) -> str:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>OBP-MCP status — {esc(mode['label'])}</title>
+<title>MCP Server status — {esc(mode['label'])}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root {{ color-scheme: light dark; }}
@@ -361,7 +361,7 @@ def _render_html(data: dict[str, Any]) -> str:
 </style>
 </head>
 <body>
-  <h1>OBP-MCP status</h1>
+  <h1>MCP Server status</h1>
   <p class="sub">{esc(srv['name'])} v{esc(srv['version'])} · up {esc(_fmt_uptime(srv['uptime_seconds']))}</p>
 {banner}
 
@@ -486,7 +486,7 @@ def _render_index_html(request: Request) -> str:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>OBP-MCP — {esc(mode['label'])}</title>
+<title>MCP Server — {esc(mode['label'])}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root {{ color-scheme: light dark; }}
@@ -509,7 +509,7 @@ def _render_index_html(request: Request) -> str:
 </style>
 </head>
 <body>
-  <h1>Open Bank Project MCP Server</h1>
+  <h1>MCP Server</h1>
   <p class="sub">Model Context Protocol access to the Open Bank Project API</p>
 {banner}
 

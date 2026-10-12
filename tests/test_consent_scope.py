@@ -1,6 +1,6 @@
 """Tests for the consent my_resources scope derived from an endpoint path."""
 
-from src.mcp_server_obp.consent_scope import my_resources_for
+from src.mcp_server_obp.consent_scope import consent_bank_id, my_resources_for
 
 
 def test_system_level_personal_entity_read():
@@ -45,3 +45,28 @@ def test_method_may_be_an_enum_like_object():
 
     out = my_resources_for("/obp/dynamic-entity/my/notes/NOTES_ID", Method(), None)
     assert out["personal_dynamic_entities"][0]["actions"] == ["write"]
+
+
+BANK_ROLE = {"role": "CanGetDynamicEntityDefinitions", "requires_bank_id": True}
+SYSTEM_ROLE = {"role": "CanGetDynamicEntityDiagnostics", "requires_bank_id": False}
+
+
+def test_consent_bank_id_from_path():
+    assert consent_bank_id({"BANK_ID": "gh.29.uk"}, {}, {}, [BANK_ROLE]) == "gh.29.uk"
+
+
+def test_consent_bank_id_from_body():
+    assert consent_bank_id({}, {}, {"bank_id": "gh.29.uk"}, [BANK_ROLE]) == "gh.29.uk"
+
+
+def test_consent_bank_id_bank_scoped_role_without_bank_is_system_space():
+    # e.g. GET /obp/v6.0.0/management/system-dynamic-entities checks the role at SYS
+    assert consent_bank_id({}, {}, {}, [BANK_ROLE]) == "SYS"
+
+
+def test_consent_bank_id_explicit_empty_bank_is_not_overridden():
+    assert consent_bank_id({}, {}, {"bank_id": ""}, [BANK_ROLE]) is None
+
+
+def test_consent_bank_id_system_role_needs_no_bank():
+    assert consent_bank_id({}, {}, {}, [SYSTEM_ROLE]) is None

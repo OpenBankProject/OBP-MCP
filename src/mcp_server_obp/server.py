@@ -37,7 +37,7 @@ from database.obp_utils import DEFAULT_API_VERSION
 
 from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
-from mcp_server_obp.consent_scope import my_resources_for
+from mcp_server_obp.consent_scope import consent_bank_id, my_resources_for
 from mcp_server_obp.forwarded_for import headers_for_obp
 from mcp_server_obp.status import health_endpoint, index_endpoint, ready_endpoint, status_endpoint
 
@@ -359,7 +359,7 @@ async def call_obp_api(
                     )
                 consent_jwt = (headers or {}).get("Consent-JWT")
                 if not consent_jwt:
-                    bank_id = (path_params or {}).get("BANK_ID") or (path_params or {}).get("bank_id")
+                    path_bank_id = (path_params or {}).get("BANK_ID") or (path_params or {}).get("bank_id")
 
                     # Start with the endpoint's own required roles
                     required_roles = [role.model_dump() for role in endpoint.roles]
@@ -377,6 +377,8 @@ async def call_obp_api(
                                 }
                                 if body_role not in required_roles:
                                     required_roles.append(body_role)
+
+                    bank_id = consent_bank_id(path_params, query_params, body, required_roles)
 
                     # Scoping metadata for the consent_required payload (used by the
                     # frontend to build the consent and label the consent card).
@@ -409,7 +411,7 @@ async def call_obp_api(
                             "is_user_scoped": is_user_scoped,
                             # The User's own resources this call needs the consent to list
                             # (owned, not granted): today, personal dynamic entities.
-                            "my_resources": my_resources_for(endpoint.path, endpoint.method, bank_id),
+                            "my_resources": my_resources_for(endpoint.path, endpoint.method, path_bank_id),
                             "message": f"User consent is required to call {endpoint.operation_id}. "
                                        f"Please approve and provide a Consent-JWT.",
                         }, indent=2)

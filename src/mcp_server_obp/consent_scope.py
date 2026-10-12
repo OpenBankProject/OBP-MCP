@@ -43,3 +43,31 @@ def my_resources_for(path: Optional[str], method: Optional[str], bank_id: Option
             {"bank_id": entity_bank_id, "entity_name": match.group(2), "actions": [action]}
         ]
     }
+
+
+def consent_bank_id(
+    path_params: Optional[dict],
+    query_params: Optional[dict],
+    body: Any,
+    required_roles: list,
+) -> Optional[str]:
+    """Return the bank a consent's bank-scoped Roles must be held at for this call, or None.
+
+    The bank comes from the path (BANK_ID), else from a `bank_id` in the body or query (Add
+    Entitlement takes it in the body). When the call names no bank at all but a required Role
+    is bank-scoped, OBP checks that Role in the system space, SYS: the Dynamic Entity Definition
+    Roles are bank-scoped and the system-level definition endpoints (e.g.
+    /management/system-dynamic-entities) check them at SYS. Returning None there would make the
+    consent look for a system-wide ("") grant that cannot exist for a bank-scoped Role.
+    """
+    path_params = path_params or {}
+    bank_id = path_params.get("BANK_ID") or path_params.get("bank_id")
+    if bank_id:
+        return bank_id
+    for source in (body, query_params):
+        if isinstance(source, dict) and "bank_id" in source:
+            # Named explicitly, even as "": the request decides, never the fallback.
+            return source["bank_id"] or None
+    if any(isinstance(r, dict) and r.get("requires_bank_id") for r in required_roles):
+        return SYSTEM_SPACE_BANK_ID
+    return None

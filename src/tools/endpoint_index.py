@@ -22,6 +22,24 @@ logger = logging.getLogger(__name__)
 
 _OBP_VERSION_RE = re.compile(r"OBPv?(\d+)\.(\d+)\.(\d+)")
 
+# Oldest OBP-API version the MCP server calls. A resource doc's request_url carries the
+# version the endpoint was implemented in (e.g. /obp/v4.0.0/banks/BANK_ID). OBP-API
+# serves every endpoint that is still current under each later version too, so calls
+# are sent to /obp/v5.1.0/... instead and older API versions can be disabled.
+MIN_OBP_API_VERSION = "v5.1.0"
+_PATH_VERSION_RE = re.compile(r"^/obp/v(\d+)\.(\d+)\.(\d+)/")
+
+
+def _floor_obp_version(path: str) -> str:
+    """Rewrite /obp/vX.Y.Z/... to MIN_OBP_API_VERSION when X.Y.Z is older; else unchanged."""
+    m = _PATH_VERSION_RE.match(path)
+    if not m:
+        return path
+    floor = tuple(int(p) for p in MIN_OBP_API_VERSION.lstrip("v").split("."))
+    if tuple(int(g) for g in m.groups()) >= floor:
+        return path
+    return f"/obp/{MIN_OBP_API_VERSION}/" + path[m.end():]
+
 
 def _parse_obp_version(endpoint_id: str) -> Tuple[int, int, int]:
     """Parse (major, minor, patch) from an OBP endpoint id like 'OBPv4.0.0-foo'.
@@ -414,7 +432,7 @@ class EndpointIndex:
         request_url = str(doc.get("request_url") or "")
         specified_url = str(doc.get("specified_url") or "")
         if request_url.startswith("/obp/"):
-            return request_url
+            return _floor_obp_version(request_url)
         if specified_url.startswith("/obp/"):
             return specified_url
         return request_url

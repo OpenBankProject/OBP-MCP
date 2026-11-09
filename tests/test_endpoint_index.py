@@ -505,6 +505,18 @@ class TestResourceDocPath:
         doc = {"request_url": "/obp/v6.0.0/banks", "specified_url": "/obp/v7.0.0/banks"}
         assert EndpointIndex._resource_doc_path(doc) == "/obp/v6.0.0/banks"
 
+    def test_static_endpoint_older_than_v510_is_called_on_v510(self):
+        from src.tools.endpoint_index import EndpointIndex
+        doc = {"request_url": "/obp/v4.0.0/banks/BANK_ID/accounts", "specified_url": "/obp/v7.0.0/banks/BANK_ID/accounts"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts"
+        doc = {"request_url": "/obp/v1.2.1/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions"
+
+    def test_static_endpoint_at_or_above_v510_is_unchanged(self):
+        from src.tools.endpoint_index import EndpointIndex
+        for path in ("/obp/v5.1.0/users/current", "/obp/v6.0.0/banks", "/obp/v7.0.0/my/accounts"):
+            assert EndpointIndex._resource_doc_path({"request_url": path}) == path
+
     def test_dynamic_entity_uses_specified_url(self):
         from src.tools.endpoint_index import EndpointIndex
         doc = {"request_url": "/obp_developer_faq", "specified_url": "/obp/dynamic-entity/obp_developer_faq"}

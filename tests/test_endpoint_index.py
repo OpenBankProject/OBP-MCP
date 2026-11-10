@@ -565,3 +565,9 @@ class TestResourceDocPath:
         assert index._index["OBPv4.0.0-getBanks"]["path"] == "/obp/v5.1.0/banks"
         assert index._schemas["OBPv4.0.0-getBanks"]["path"] == "/obp/v5.1.0/banks"
         assert index._index["OBPv6.0.0-getUsers"]["path"] == "/obp/v6.0.0/users"
+
+    def test_specified_url_below_v510_is_called_on_v510(self):
+        """A catalog requested for an older version gives specified_url in that version."""
+        from src.tools.endpoint_index import EndpointIndex
+        doc = {"request_url": "/accounts", "specified_url": "/obp/v4.0.0/banks/BANK_ID/accounts"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts"

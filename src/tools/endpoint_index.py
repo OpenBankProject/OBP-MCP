@@ -41,6 +41,18 @@ def _floor_obp_version(path: str) -> str:
     return f"/obp/{MIN_OBP_API_VERSION}/" + path[m.end():]
 
 
+def _floor_entry_paths(entries: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply _floor_obp_version to the "path" of every stored index or schema entry.
+
+    Index files are regenerated only when OBP-API's data changes, so files written before the
+    floor existed are corrected when they are loaded.
+    """
+    for entry in entries.values():
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+            entry["path"] = _floor_obp_version(entry["path"])
+    return entries
+
+
 def _parse_obp_version(endpoint_id: str) -> Tuple[int, int, int]:
     """Parse (major, minor, patch) from an OBP endpoint id like 'OBPv4.0.0-foo'.
 
@@ -302,7 +314,7 @@ class EndpointIndex:
         try:
             with open(self.index_file, 'r') as f:
                 data = json.load(f)
-                self._index = data.get('endpoints', {})
+                self._index = _floor_entry_paths(data.get('endpoints', {}))
                 # Clear cached models when reloading
                 self._index_models = {}
                 logger.info(f"Loaded {len(self._index)} endpoints from index")
@@ -319,7 +331,7 @@ class EndpointIndex:
         try:
             if self.schemas_file.exists():
                 with open(self.schemas_file, 'r') as f:
-                    self._schemas = json.load(f)
+                    self._schemas = _floor_entry_paths(json.load(f))
                 # Clear cached models when reloading
                 self._schema_models = {}
                 logger.info(f"Loaded {len(self._schemas)} endpoint schemas")
@@ -369,7 +381,8 @@ class EndpointIndex:
         
         logger.info(f"Building index from {len(paths)} paths...")
         
-        for path, methods in paths.items():
+        for swagger_path, methods in paths.items():
+            path = _floor_obp_version(swagger_path)
             for method, details in methods.items():
                 if not isinstance(details, dict):
                     continue
@@ -383,9 +396,9 @@ class EndpointIndex:
                 if operation_id:
                     endpoint_id = operation_id
                 else:
-                    endpoint_id = self._generate_endpoint_id(method, path)
-                    logger.warning(f"No operationId for {method} {path}, using generated ID: {endpoint_id}")
-                
+                    endpoint_id = self._generate_endpoint_id(method, swagger_path)
+                    logger.warning(f"No operationId for {method} {swagger_path}, using generated ID: {endpoint_id}")
+
                 # Store lightweight index entry
                 self._index[endpoint_id] = {
                     "id": endpoint_id,

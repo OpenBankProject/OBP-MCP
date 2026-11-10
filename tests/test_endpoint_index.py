@@ -505,6 +505,32 @@ class TestResourceDocPath:
         doc = {"request_url": "/obp/v6.0.0/banks", "specified_url": "/obp/v7.0.0/banks"}
         assert EndpointIndex._resource_doc_path(doc) == "/obp/v6.0.0/banks"
 
+    # The tests below check the v5.1.0 floor: MCP calls every OBP-API endpoint on v5.1.0 or newer.
+    #
+    # operation_id records the version the endpoint was implemented in; path is the URL MCP actually calls.
+    # OBP-API also serves an implementation that no newer version replaced under every newer prefix, so
+    # OBPv4.0.0-getMySpaces answers on /obp/v4.0.0/my/spaces and on /obp/v5.1.0/my/spaces alike.
+    # Resource docs give the path with the version the endpoint was implemented in. MCP calls it through
+    # the v5.1.0 prefix instead, so it keeps working where versions below v5.1.0 are disabled. The
+    # examples are endpoints that v5.1.0 and v7.0.0 still serve with the same implementation.
+
+    def test_v400_and_v121_implementations_are_called_through_the_v510_prefix(self):
+        """Tests that a resource doc path below v5.1.0 becomes the same path on /obp/v5.1.0."""
+        from src.tools.endpoint_index import EndpointIndex
+        # OBPv4.0.0-getPrivateAccountsAtOneBank: the v4.0.0 path is called through the v5.1.0 prefix.
+        # request_url wins over specified_url for a static endpoint, as before this change.
+        doc = {"request_url": "/obp/v4.0.0/banks/BANK_ID/accounts", "specified_url": "/obp/v7.0.0/banks/BANK_ID/accounts"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts"
+        # OBPv1.2.1-getTransactionNarrative: the oldest version is moved up to v5.1.0 the same way.
+        doc = {"request_url": "/obp/v1.2.1/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions/TRANSACTION_ID/metadata/narrative"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions/TRANSACTION_ID/metadata/narrative"
+
+    def test_static_endpoint_at_or_above_v510_is_unchanged(self):
+        """Tests that a path already on v5.1.0, v6.0.0 or v7.0.0 is called as it is, never moved down."""
+        from src.tools.endpoint_index import EndpointIndex
+        for path in ("/obp/v5.1.0/users/current", "/obp/v6.0.0/banks", "/obp/v7.0.0/my/accounts"):
+            assert EndpointIndex._resource_doc_path({"request_url": path}) == path
+
     def test_dynamic_entity_uses_specified_url(self):
         from src.tools.endpoint_index import EndpointIndex
         doc = {"request_url": "/obp_developer_faq", "specified_url": "/obp/dynamic-entity/obp_developer_faq"}
@@ -527,3 +553,52 @@ class TestResourceDocPath:
         }]})
         assert index._index["OBPv4.0.0-dynamicEntity_getobp_developer_faqList_"]["path"] == "/obp/dynamic-entity/obp_developer_faq"
         assert index._schemas["OBPv4.0.0-dynamicEntity_getobp_developer_faqList_"]["path"] == "/obp/dynamic-entity/obp_developer_faq"
+
+    def test_stored_index_calls_the_v400_implementation_through_the_v510_prefix(self, tmp_path):
+        """Tests that index and schema files written before this change, which still hold /obp/v4.0.0
+        paths, are called through the v5.1.0 prefix once loaded, without regenerating them."""
+        from src.tools.endpoint_index import EndpointIndex
+        index_file = tmp_path / "endpoint_index.json"
+        schemas_file = tmp_path / "endpoint_schemas.json"
+        index_file.write_text(json.dumps({"endpoints": {"OBPv4.0.0-getMySpaces": {
+            "id": "OBPv4.0.0-getMySpaces", "method": "GET", "path": "/obp/v4.0.0/my/spaces",
+            "operation_id": "OBPv4.0.0-getMySpaces", "summary": "Get My Spaces", "tags": ["Bank"]}}}))
+        schemas_file.write_text(json.dumps({"OBPv4.0.0-getMySpaces": {
+            "path": "/obp/v4.0.0/my/spaces", "method": "GET", "operation_id": "OBPv4.0.0-getMySpaces",
+            "summary": "Get My Spaces", "description": "", "tags": ["Bank"]}}))
+        index = EndpointIndex(index_file=str(index_file), schemas_file=str(schemas_file))
+        # The endpoint keeps its operation_id: it is still the v4.0.0 implementation of Get My Spaces.
+        assert index._index["OBPv4.0.0-getMySpaces"]["operation_id"] == "OBPv4.0.0-getMySpaces"
+        # The file said /obp/v4.0.0/my/spaces; once loaded, list_endpoints_by_tag shows the v5.1.0 path.
+        assert index._index["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
+        schema = index.get_endpoint_schema("OBPv4.0.0-getMySpaces")
+        # The schema file is read the same way: same operation_id ...
+        assert schema.operation_id == "OBPv4.0.0-getMySpaces"
+        # ... and the v5.1.0 path, which is the URL call_obp_api requests.
+        assert schema.path == "/obp/v5.1.0/my/spaces"
+
+    def test_swagger_index_calls_the_v400_implementation_through_the_v510_prefix(self):
+        """Tests that an index built from swagger moves a path below v5.1.0 to the v5.1.0 prefix
+        and leaves a path on v5.1.0 or newer as it is."""
+        from src.tools.endpoint_index import EndpointIndex
+        index = EndpointIndex.__new__(EndpointIndex)
+        index.build_index_from_swagger({"paths": {
+            "/obp/v4.0.0/my/spaces": {"get": {"operationId": "OBPv4.0.0-getMySpaces", "summary": "Get My Spaces", "tags": ["Bank"]}},
+            "/obp/v6.0.0/users": {"get": {"operationId": "OBPv6.0.0-getUsers", "summary": "Get Users", "tags": ["User"]}},
+        }})
+        # The swagger operationId becomes the endpoint's id and operation_id, unchanged: still the v4.0.0 implementation.
+        assert index._index["OBPv4.0.0-getMySpaces"]["operation_id"] == "OBPv4.0.0-getMySpaces"
+        # The swagger path /obp/v4.0.0/my/spaces is stored as the v5.1.0 path in the index ...
+        assert index._index["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
+        # ... and in the schema that call_obp_api reads the URL from, so both agree.
+        assert index._schemas["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
+        # A path already on v5.1.0 or newer is stored as it is.
+        assert index._index["OBPv6.0.0-getUsers"]["path"] == "/obp/v6.0.0/users"
+
+    def test_specified_url_below_v510_is_called_through_the_v510_prefix(self):
+        """Tests that specified_url is moved to v5.1.0 too: a catalog requested for an older version
+        (API_VERSION_OF_INTEREST below v5.1.0) gives specified_url in that older version."""
+        from src.tools.endpoint_index import EndpointIndex
+        # A relative request_url makes MCP use specified_url, which here is on v4.0.0.
+        doc = {"request_url": "/accounts", "specified_url": "/obp/v4.0.0/banks/BANK_ID/accounts"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts"

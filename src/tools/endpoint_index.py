@@ -22,6 +22,39 @@ logger = logging.getLogger(__name__)
 
 _OBP_VERSION_RE = re.compile(r"OBPv?(\d+)\.(\d+)\.(\d+)")
 
+# Oldest OBP-API version the MCP server calls. A resource doc's request_url carries the
+# version the endpoint was implemented in (e.g. /obp/v4.0.0/banks/BANK_ID). OBP-API
+# serves every endpoint that is still current under each later version too, so calls
+# are sent to /obp/v5.1.0/... instead and older API versions can be disabled.
+# This holds for a catalog requested for v5.1.0 or newer (API_VERSION_OF_INTEREST, default
+# v7.0.0): every older endpoint in it is still served under v5.1.0. A catalog requested
+# for an older version can list endpoints that v5.1.0 no longer serves.
+MIN_OBP_API_VERSION = "v5.1.0"
+_PATH_VERSION_RE = re.compile(r"^/obp/v(\d+)\.(\d+)\.(\d+)/")
+
+
+def _floor_obp_version(path: str) -> str:
+    """Rewrite /obp/vX.Y.Z/... to MIN_OBP_API_VERSION when X.Y.Z is older; else unchanged."""
+    m = _PATH_VERSION_RE.match(path)
+    if not m:
+        return path
+    floor = tuple(int(p) for p in MIN_OBP_API_VERSION.lstrip("v").split("."))
+    if tuple(int(g) for g in m.groups()) >= floor:
+        return path
+    return f"/obp/{MIN_OBP_API_VERSION}/" + path[m.end():]
+
+
+def _floor_entry_paths(entries: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply _floor_obp_version to the "path" of every stored index or schema entry.
+
+    Index files are regenerated only when OBP-API's data changes, so files written before the
+    floor existed are corrected when they are loaded.
+    """
+    for entry in entries.values():
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+            entry["path"] = _floor_obp_version(entry["path"])
+    return entries
+
 
 def _parse_obp_version(endpoint_id: str) -> Tuple[int, int, int]:
     """Parse (major, minor, patch) from an OBP endpoint id like 'OBPv4.0.0-foo'.
@@ -284,7 +317,7 @@ class EndpointIndex:
         try:
             with open(self.index_file, 'r') as f:
                 data = json.load(f)
-                self._index = data.get('endpoints', {})
+                self._index = _floor_entry_paths(data.get('endpoints', {}))
                 # Clear cached models when reloading
                 self._index_models = {}
                 logger.info(f"Loaded {len(self._index)} endpoints from index")
@@ -301,7 +334,7 @@ class EndpointIndex:
         try:
             if self.schemas_file.exists():
                 with open(self.schemas_file, 'r') as f:
-                    self._schemas = json.load(f)
+                    self._schemas = _floor_entry_paths(json.load(f))
                 # Clear cached models when reloading
                 self._schema_models = {}
                 logger.info(f"Loaded {len(self._schemas)} endpoint schemas")
@@ -351,7 +384,8 @@ class EndpointIndex:
         
         logger.info(f"Building index from {len(paths)} paths...")
         
-        for path, methods in paths.items():
+        for swagger_path, methods in paths.items():
+            path = _floor_obp_version(swagger_path)
             for method, details in methods.items():
                 if not isinstance(details, dict):
                     continue
@@ -365,9 +399,9 @@ class EndpointIndex:
                 if operation_id:
                     endpoint_id = operation_id
                 else:
-                    endpoint_id = self._generate_endpoint_id(method, path)
-                    logger.warning(f"No operationId for {method} {path}, using generated ID: {endpoint_id}")
-                
+                    endpoint_id = self._generate_endpoint_id(method, swagger_path)
+                    logger.warning(f"No operationId for {method} {swagger_path}, using generated ID: {endpoint_id}")
+
                 # Store lightweight index entry
                 self._index[endpoint_id] = {
                     "id": endpoint_id,
@@ -414,9 +448,9 @@ class EndpointIndex:
         request_url = str(doc.get("request_url") or "")
         specified_url = str(doc.get("specified_url") or "")
         if request_url.startswith("/obp/"):
-            return request_url
+            return _floor_obp_version(request_url)
         if specified_url.startswith("/obp/"):
-            return specified_url
+            return _floor_obp_version(specified_url)
         return request_url
 
     def build_index_from_resource_docs(self, resource_docs_data: Dict[str, Any]) -> None:

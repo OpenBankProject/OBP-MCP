@@ -560,11 +560,14 @@ class TestResourceDocPath:
             "path": "/obp/v4.0.0/my/spaces", "method": "GET", "operation_id": "OBPv4.0.0-getMySpaces",
             "summary": "Get My Spaces", "description": "", "tags": ["Bank"]}}))
         index = EndpointIndex(index_file=str(index_file), schemas_file=str(schemas_file))
-        # Same implementation (the operation_id stays OBPv4.0.0-...), called through the v5.1.0 prefix.
+        # The endpoint keeps its operation_id: it is still the v4.0.0 implementation of Get My Spaces.
         assert index._index["OBPv4.0.0-getMySpaces"]["operation_id"] == "OBPv4.0.0-getMySpaces"
+        # The file said /obp/v4.0.0/my/spaces; once loaded, list_endpoints_by_tag shows the v5.1.0 path.
         assert index._index["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
         schema = index.get_endpoint_schema("OBPv4.0.0-getMySpaces")
+        # The schema file is read the same way: same operation_id ...
         assert schema.operation_id == "OBPv4.0.0-getMySpaces"
+        # ... and the v5.1.0 path, which is the URL call_obp_api requests.
         assert schema.path == "/obp/v5.1.0/my/spaces"
 
     def test_swagger_index_calls_the_v400_implementation_through_the_v510_prefix(self):
@@ -574,11 +577,13 @@ class TestResourceDocPath:
             "/obp/v4.0.0/my/spaces": {"get": {"operationId": "OBPv4.0.0-getMySpaces", "summary": "Get My Spaces", "tags": ["Bank"]}},
             "/obp/v6.0.0/users": {"get": {"operationId": "OBPv6.0.0-getUsers", "summary": "Get Users", "tags": ["User"]}},
         }})
-        # Same implementation (the operation_id stays OBPv4.0.0-...), called through the v5.1.0 prefix.
+        # The swagger operationId becomes the endpoint's id and operation_id, unchanged: still the v4.0.0 implementation.
         assert index._index["OBPv4.0.0-getMySpaces"]["operation_id"] == "OBPv4.0.0-getMySpaces"
+        # The swagger path /obp/v4.0.0/my/spaces is stored as the v5.1.0 path in the index ...
         assert index._index["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
+        # ... and in the schema that call_obp_api reads the URL from, so both agree.
         assert index._schemas["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
-        # Paths already on v5.1.0 or newer are called as they are.
+        # A path already on v5.1.0 or newer is stored as it is.
         assert index._index["OBPv6.0.0-getUsers"]["path"] == "/obp/v6.0.0/users"
 
     def test_specified_url_below_v510_is_called_through_the_v510_prefix(self):

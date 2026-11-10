@@ -26,6 +26,9 @@ _OBP_VERSION_RE = re.compile(r"OBPv?(\d+)\.(\d+)\.(\d+)")
 # version the endpoint was implemented in (e.g. /obp/v4.0.0/banks/BANK_ID). OBP-API
 # serves every endpoint that is still current under each later version too, so calls
 # are sent to /obp/v5.1.0/... instead and older API versions can be disabled.
+# This holds for a catalog requested for v5.1.0 or newer (API_VERSION_OF_INTEREST, default
+# v7.0.0): every older endpoint in it is still served under v5.1.0. A catalog requested
+# for an older version can list endpoints that v5.1.0 no longer serves.
 MIN_OBP_API_VERSION = "v5.1.0"
 _PATH_VERSION_RE = re.compile(r"^/obp/v(\d+)\.(\d+)\.(\d+)/")
 
@@ -447,7 +450,7 @@ class EndpointIndex:
         if request_url.startswith("/obp/"):
             return _floor_obp_version(request_url)
         if specified_url.startswith("/obp/"):
-            return specified_url
+            return _floor_obp_version(specified_url)
         return request_url
 
     def build_index_from_resource_docs(self, resource_docs_data: Dict[str, Any]) -> None:

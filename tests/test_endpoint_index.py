@@ -506,11 +506,13 @@ class TestResourceDocPath:
         assert EndpointIndex._resource_doc_path(doc) == "/obp/v6.0.0/banks"
 
     def test_static_endpoint_older_than_v510_is_called_on_v510(self):
+        # Endpoints whose newest implementation is below v5.1.0, so v5.1.0 serves the same one:
+        # OBPv4.0.0-getPrivateAccountsAtOneBank and OBPv1.2.1-getTransactionNarrative.
         from src.tools.endpoint_index import EndpointIndex
         doc = {"request_url": "/obp/v4.0.0/banks/BANK_ID/accounts", "specified_url": "/obp/v7.0.0/banks/BANK_ID/accounts"}
         assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts"
-        doc = {"request_url": "/obp/v1.2.1/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions"}
-        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions"
+        doc = {"request_url": "/obp/v1.2.1/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions/TRANSACTION_ID/metadata/narrative"}
+        assert EndpointIndex._resource_doc_path(doc) == "/obp/v5.1.0/banks/BANK_ID/accounts/ACCOUNT_ID/VIEW_ID/transactions/TRANSACTION_ID/metadata/narrative"
 
     def test_static_endpoint_at_or_above_v510_is_unchanged(self):
         from src.tools.endpoint_index import EndpointIndex
@@ -545,25 +547,26 @@ class TestResourceDocPath:
         from src.tools.endpoint_index import EndpointIndex
         index_file = tmp_path / "endpoint_index.json"
         schemas_file = tmp_path / "endpoint_schemas.json"
-        index_file.write_text(json.dumps({"endpoints": {"OBPv4.0.0-getBanks": {
-            "id": "OBPv4.0.0-getBanks", "method": "GET", "path": "/obp/v4.0.0/banks",
-            "operation_id": "OBPv4.0.0-getBanks", "summary": "Get Banks", "tags": ["Bank"]}}}))
-        schemas_file.write_text(json.dumps({"OBPv4.0.0-getBanks": {
-            "path": "/obp/v4.0.0/banks", "method": "GET", "operation_id": "OBPv4.0.0-getBanks",
-            "summary": "Get Banks", "description": "", "tags": ["Bank"]}}))
+        # OBPv4.0.0-getMySpaces is still the implementation v5.1.0 and v7.0.0 serve on /my/spaces.
+        index_file.write_text(json.dumps({"endpoints": {"OBPv4.0.0-getMySpaces": {
+            "id": "OBPv4.0.0-getMySpaces", "method": "GET", "path": "/obp/v4.0.0/my/spaces",
+            "operation_id": "OBPv4.0.0-getMySpaces", "summary": "Get My Spaces", "tags": ["Bank"]}}}))
+        schemas_file.write_text(json.dumps({"OBPv4.0.0-getMySpaces": {
+            "path": "/obp/v4.0.0/my/spaces", "method": "GET", "operation_id": "OBPv4.0.0-getMySpaces",
+            "summary": "Get My Spaces", "description": "", "tags": ["Bank"]}}))
         index = EndpointIndex(index_file=str(index_file), schemas_file=str(schemas_file))
-        assert index._index["OBPv4.0.0-getBanks"]["path"] == "/obp/v5.1.0/banks"
-        assert index.get_endpoint_schema("OBPv4.0.0-getBanks").path == "/obp/v5.1.0/banks"
+        assert index._index["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
+        assert index.get_endpoint_schema("OBPv4.0.0-getMySpaces").path == "/obp/v5.1.0/my/spaces"
 
     def test_swagger_index_is_called_on_v510(self):
         from src.tools.endpoint_index import EndpointIndex
         index = EndpointIndex.__new__(EndpointIndex)
         index.build_index_from_swagger({"paths": {
-            "/obp/v4.0.0/banks": {"get": {"operationId": "OBPv4.0.0-getBanks", "summary": "Get Banks", "tags": ["Bank"]}},
+            "/obp/v4.0.0/my/spaces": {"get": {"operationId": "OBPv4.0.0-getMySpaces", "summary": "Get My Spaces", "tags": ["Bank"]}},
             "/obp/v6.0.0/users": {"get": {"operationId": "OBPv6.0.0-getUsers", "summary": "Get Users", "tags": ["User"]}},
         }})
-        assert index._index["OBPv4.0.0-getBanks"]["path"] == "/obp/v5.1.0/banks"
-        assert index._schemas["OBPv4.0.0-getBanks"]["path"] == "/obp/v5.1.0/banks"
+        assert index._index["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
+        assert index._schemas["OBPv4.0.0-getMySpaces"]["path"] == "/obp/v5.1.0/my/spaces"
         assert index._index["OBPv6.0.0-getUsers"]["path"] == "/obp/v6.0.0/users"
 
     def test_specified_url_below_v510_is_called_on_v510(self):

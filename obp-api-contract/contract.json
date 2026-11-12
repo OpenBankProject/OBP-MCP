@@ -1,0 +1,135 @@
+{
+ "about": "Every OBP-API call OBP-MCP makes on its own: verb, path (OBP placeholders in capitals), the source file and the text that makes the call (needles), and the response fields the code reads. These are the meta calls (root, glossary, resource docs, swagger). Versions come from OBP_VERSION_TO_CALL and API_VERSION_OF_INTEREST; the paths record their default, DEFAULT_API_VERSION in database/obp_utils.py. The call_obp_api tool is not listed: it calls whatever endpoint the user picks from the index, on a path read from the resource docs (moved up to v5.1.0 by the floor in src/tools/endpoint_index.py). Calls to Keycloak and OBP-OIDC (JWKS, client registration) are not OBP-API calls. tests/test_obp_api_contract.py checks this list against the source and against snapshot.json, which obp-api-contract/snapshot.py writes from an OBP-API's resource docs.",
+ "calls": [
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/root",
+   "source": "database/data_hash_manager.py",
+   "needles": [
+    "root_url = f\"{self.base_url}/obp/{self.version_to_call}/root\"",
+    "self.version_to_call = os.getenv(\"OBP_VERSION_TO_CALL\", DEFAULT_API_VERSION)"
+   ],
+   "reads": [],
+   "note": "Health check before an index refresh; only the HTTP status is used."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/api/glossary",
+   "source": "database/data_hash_manager.py",
+   "needles": [
+    "glossary_url = f\"{self.base_url}/obp/{self.version_to_call}/api/glossary\""
+   ],
+   "reads": [],
+   "note": "The whole body is hashed to detect a change; no field is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/resource-docs/v7.0.0/obp",
+   "source": "database/data_hash_manager.py",
+   "needles": [
+    "resource_docs_url = f\"{self.base_url}/obp/{self.version_to_call}/resource-docs/{self.version_of_interest}/obp?content={endpoint_type}\"",
+    "self.version_of_interest = os.getenv(\"API_VERSION_OF_INTEREST\", DEFAULT_API_VERSION)"
+   ],
+   "reads": [],
+   "note": "The whole body is hashed to detect a change; no field is read."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/api/glossary",
+   "source": "database/obp_utils.py",
+   "needles": [
+    "\"glossary_url\": f\"{base_url}/obp/{version_to_call}/api/glossary\"",
+    "DEFAULT_API_VERSION = \"v7.0.0\""
+   ],
+   "reads": [
+    "glossary_items",
+    "glossary_items[].title",
+    "glossary_items[].description",
+    "glossary_items[].description.markdown",
+    "glossary_items[].description.html"
+   ],
+   "note": "Fetched by scripts/generate_glossary_index.py, which reads the fields; it falls back to other key names (glossary, items, name, term, definition) when these are absent."
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/resource-docs/v7.0.0/obp",
+   "source": "database/obp_utils.py",
+   "needles": [
+    "\"resource_docs_url\": f\"{base_url}/obp/{version_to_call}/resource-docs/{version_of_interest}/obp?content={endpoint_type}\"",
+    "DEFAULT_API_VERSION = \"v7.0.0\""
+   ],
+   "reads": [
+    "resource_docs",
+    "resource_docs[].operation_id",
+    "resource_docs[].request_verb",
+    "resource_docs[].request_url",
+    "resource_docs[].specified_url",
+    "resource_docs[].summary",
+    "resource_docs[].tags",
+    "resource_docs[].description",
+    "resource_docs[].description_markdown",
+    "resource_docs[].example_request_body",
+    "resource_docs[].typed_request_body",
+    "resource_docs[].success_response_body",
+    "resource_docs[].error_response_bodies",
+    "resource_docs[].typed_success_response_body",
+    "resource_docs[].roles",
+    "resource_docs[].roles[].role",
+    "resource_docs[].roles[].requires_bank_id",
+    "resource_docs[].is_featured",
+    "resource_docs[].special_instructions",
+    "resource_docs[].connector_methods"
+   ],
+   "note": "Fetched by scripts/generate_endpoint_index.py; EndpointIndex.build_index_from_resource_docs (src/tools/endpoint_index.py) reads the fields. The index is what call_obp_api calls from. OBP-API documents no response body for getResourceDocsObp (its typed_success_response_body is empty); the live response carries every field read here (checked on k8s.openbankproject.com, 2026-11-13).",
+   "undocumented_fields": [
+    "resource_docs",
+    "resource_docs[].operation_id",
+    "resource_docs[].request_verb",
+    "resource_docs[].request_url",
+    "resource_docs[].specified_url",
+    "resource_docs[].summary",
+    "resource_docs[].tags",
+    "resource_docs[].description",
+    "resource_docs[].description_markdown",
+    "resource_docs[].example_request_body",
+    "resource_docs[].typed_request_body",
+    "resource_docs[].success_response_body",
+    "resource_docs[].error_response_bodies",
+    "resource_docs[].typed_success_response_body",
+    "resource_docs[].roles",
+    "resource_docs[].roles[].role",
+    "resource_docs[].roles[].requires_bank_id",
+    "resource_docs[].is_featured",
+    "resource_docs[].special_instructions",
+    "resource_docs[].connector_methods"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/resource-docs/v7.0.0/swagger",
+   "source": "database/obp_utils.py",
+   "needles": [
+    "\"swagger_url\": f\"{base_url}/obp/{version_to_call}/resource-docs/{version_of_interest}/swagger?content={endpoint_type}\"",
+    "DEFAULT_API_VERSION = \"v7.0.0\""
+   ],
+   "reads": [
+    "paths"
+   ],
+   "note": "Only with scripts/generate_endpoint_index.py --use-swagger. EndpointIndex.build_index_from_swagger reads paths; below it the keys are path templates and HTTP methods, which a field path cannot name. OBP-API documents no response body for getResourceDocsSwagger (its typed_success_response_body is empty); the live response carries every field read here (checked on k8s.openbankproject.com, 2026-11-13).",
+   "undocumented_fields": [
+    "paths"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/root",
+   "source": "src/mcp_server_obp/status.py",
+   "needles": [
+    "f\"{obp_base_url}/obp/{obp_version_to_call}/root\"",
+    "obp_version_to_call = os.getenv(\"OBP_VERSION_TO_CALL\", DEFAULT_API_VERSION)"
+   ],
+   "reads": [],
+   "note": "The /status page and the readiness check; only the HTTP status is used."
+  }
+ ]
+}

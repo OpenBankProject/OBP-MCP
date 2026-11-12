@@ -1,0 +1,110 @@
+{
+ "about": "Written by obp-api-contract/snapshot.py; do not edit by hand.",
+ "obp_api": {
+  "https://k8s.openbankproject.com": {
+   "version": "v7.0.0",
+   "git_commit": "474d4bcc554f1d8e9516e12d85be121d92410aa5"
+  }
+ },
+ "taken_at": "2026-11-12T23:16:31Z",
+ "endpoints": [
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/root",
+   "docs_from": "https://k8s.openbankproject.com",
+   "operation_id": "OBPv7.0.0-root",
+   "documented_path": "/obp/v7.0.0/root",
+   "fields": [
+    "connector",
+    "git_commit",
+    "hosted_by",
+    "hosted_by.email",
+    "hosted_by.organisation",
+    "hosted_by.organisation_website",
+    "hosted_by.phone",
+    "version",
+    "version_status"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/api/glossary",
+   "docs_from": "https://k8s.openbankproject.com",
+   "operation_id": "OBPv7.0.0-getGlossary",
+   "documented_path": "/obp/v7.0.0/api/glossary",
+   "fields": [
+    "glossary_items",
+    "glossary_items[]",
+    "glossary_items[].description",
+    "glossary_items[].description.html",
+    "glossary_items[].description.markdown",
+    "glossary_items[].is_dynamic",
+    "glossary_items[].overrides_static_item",
+    "glossary_items[].shadows_static_glossary_item",
+    "glossary_items[].title",
+    "total_count"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/resource-docs/v7.0.0/obp",
+   "docs_from": "https://k8s.openbankproject.com",
+   "operation_id": "OBPv1.4.0-getResourceDocsObp",
+   "documented_path": "/obp/v7.0.0/resource-docs/API_VERSION/obp",
+   "fields": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/api/glossary",
+   "docs_from": "https://k8s.openbankproject.com",
+   "operation_id": "OBPv7.0.0-getGlossary",
+   "documented_path": "/obp/v7.0.0/api/glossary",
+   "fields": [
+    "glossary_items",
+    "glossary_items[]",
+    "glossary_items[].description",
+    "glossary_items[].description.html",
+    "glossary_items[].description.markdown",
+    "glossary_items[].is_dynamic",
+    "glossary_items[].overrides_static_item",
+    "glossary_items[].shadows_static_glossary_item",
+    "glossary_items[].title",
+    "total_count"
+   ]
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/resource-docs/v7.0.0/obp",
+   "docs_from": "https://k8s.openbankproject.com",
+   "operation_id": "OBPv1.4.0-getResourceDocsObp",
+   "documented_path": "/obp/v7.0.0/resource-docs/API_VERSION/obp",
+   "fields": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/resource-docs/v7.0.0/swagger",
+   "docs_from": "https://k8s.openbankproject.com",
+   "operation_id": "OBPv1.4.0-getResourceDocsSwagger",
+   "documented_path": "/obp/v7.0.0/resource-docs/API_VERSION/swagger",
+   "fields": []
+  },
+  {
+   "verb": "GET",
+   "path": "/obp/v7.0.0/root",
+   "docs_from": "https://k8s.openbankproject.com",
+   "operation_id": "OBPv7.0.0-root",
+   "documented_path": "/obp/v7.0.0/root",
+   "fields": [
+    "connector",
+    "git_commit",
+    "hosted_by",
+    "hosted_by.email",
+    "hosted_by.organisation",
+    "hosted_by.organisation_website",
+    "hosted_by.phone",
+    "version",
+    "version_status"
+   ]
+  }
+ ]
+}

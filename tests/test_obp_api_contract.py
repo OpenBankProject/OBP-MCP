@@ -11,14 +11,21 @@ new OBP-API build to learn whether that build breaks OBP-MCP.
 
 import ast
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
 from database.obp_utils import DEFAULT_API_VERSION
+from src.tools.endpoint_index import MIN_OBP_API_VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_DIR = ROOT / "obp-api-contract"
 SOURCE_DIRS = ["src", "database", "scripts"]
+
+# The two settings that pick the version of the meta calls, and the files that give them a default.
+VERSION_SETTINGS = ("OBP_VERSION_TO_CALL", "API_VERSION_OF_INTEREST")
+DEPLOYMENT_FILES = ["Dockerfile", "docker-compose.yml", "run_server.sh", ".env.example"]
+VERSION = r"v\d+\.\d+\.\d+"
 
 # Strings that contain an OBP-API path but make no call of their own: (file, needle, reason).
 NOT_CALLS = [
@@ -216,3 +223,63 @@ def f(base, v):
     return a, b, c
 '''
     assert [n for n, _ in obp_path_strings("example.py", source)] == [5, 6]
+
+
+def version_tuple(version):
+    return tuple(int(p) for p in version.lstrip("v").split("."))
+
+
+def version_defaults(text):
+    """The version each of VERSION_SETTINGS is given in a deployment file, as (setting, version). A version is
+    read on the line of the setting (`ENV X=v7.0.0`, `X: ${X:-v7.0.0}`, `X="v7.0.0"`) or, for a Kubernetes
+    style block, on the `value:` line right after `name: X`."""
+    names = "|".join(VERSION_SETTINGS)
+    same_line = re.finditer(rf"\b({names})\b[^\n]*?({VERSION})", text)
+    next_line = re.finditer(rf"\b({names})\b[\"']?[ \t]*\n[ \t]*value:[ \t]*[\"']?({VERSION})", text)
+    return sorted({(m.group(1), m.group(2)) for m in [*same_line, *next_line]})
+
+
+def test_the_meta_calls_stay_on_or_above_the_minimum_api_version():
+    """Tests the v5.1.0 floor of the meta calls (root, glossary, resource docs): DEFAULT_API_VERSION, the
+    OBP_VERSION_TO_CALL and API_VERSION_OF_INTEREST defaults in the deployment files, and the version of every
+    contract path are at least MIN_OBP_API_VERSION (src/tools/endpoint_index.py), the oldest version OBP-API
+    deployments keep switched on."""
+    floor = version_tuple(MIN_OBP_API_VERSION)
+    problems = []
+    if version_tuple(DEFAULT_API_VERSION) < floor:
+        problems.append(f"database/obp_utils.py: DEFAULT_API_VERSION {DEFAULT_API_VERSION}")
+    for name in DEPLOYMENT_FILES:
+        found = version_defaults((ROOT / name).read_text())
+        for setting in VERSION_SETTINGS:
+            if setting not in {s for s, _ in found}:
+                problems.append(f"{name}: no default for {setting}")
+        problems += [f"{name}: {s} {v}" for s, v in found if version_tuple(v) < floor]
+    for call in calls():
+        problems += [
+            f"{key(call)}: {segment}"
+            for segment in re.findall(VERSION, call["path"])
+            if version_tuple(segment) < floor
+        ]
+    assert problems == [], f"below {MIN_OBP_API_VERSION}"
+
+
+def test_the_version_default_scan_reads_the_ways_a_default_is_written():
+    """Tests the scan of the deployment files itself: a Dockerfile ENV, a compose default, a shell default, an
+    .env value and a Kubernetes name/value pair are read; an echo of the setting without a version is not."""
+    text = """ENV OBP_VERSION_TO_CALL=v4.0.0
+      API_VERSION_OF_INTEREST: ${API_VERSION_OF_INTEREST:-v3.1.0}
+export OBP_VERSION_TO_CALL=${OBP_VERSION_TO_CALL:-v5.0.0}
+OBP_VERSION_TO_CALL="v7.0.0"
+- name: API_VERSION_OF_INTEREST
+  value: "v2.0.0"
+echo "OBP Version To Call: $OBP_VERSION_TO_CALL"
+- name: OBP_VERSION_TO_CALL
+  valueFrom: configMap
+"""
+    assert version_defaults(text) == [
+        ("API_VERSION_OF_INTEREST", "v2.0.0"),
+        ("API_VERSION_OF_INTEREST", "v3.1.0"),
+        ("OBP_VERSION_TO_CALL", "v4.0.0"),
+        ("OBP_VERSION_TO_CALL", "v5.0.0"),
+        ("OBP_VERSION_TO_CALL", "v7.0.0"),
+    ]

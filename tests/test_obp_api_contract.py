@@ -39,6 +39,34 @@ NOT_CALLS = [
         'return f"/obp/{MIN_OBP_API_VERSION}/" + path[m.end():]',
         "moves a resource doc path up to v5.1.0; call_obp_api calls it for the user",
     ),
+    (
+        "src/tools/endpoint_index.py",
+        'if request_url.startswith("/obp/"):',
+        "tells a full resource doc path from an entity-relative one; the path is floored, not called here",
+    ),
+    (
+        "src/tools/endpoint_index.py",
+        'if specified_url.startswith("/obp/"):',
+        "tells a full resource doc path from an entity-relative one; the path is floored, not called here",
+    ),
+]
+
+# Every call of an HTTP client in the source: (file, text inside the call, what it calls). An OBP-API call
+# built from a variable has its URL in a string listed in contract.json; the other entries are not OBP-API calls.
+HTTP_CLIENTS = {"requests", "httpx", "client", "session"}
+HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "request"}
+HTTP_CALLS = [
+    ("database/obp_utils.py", "requests.get(url", "OBP-API; fetch_obp_data gets the URLs get_obp_config builds (contract.json)"),
+    ("database/data_hash_manager.py", "requests.get(root_url", "OBP-API root, the URL is listed in contract.json"),
+    ("database/data_hash_manager.py", "requests.get(url", "OBP-API glossary and resource docs, the URLs are listed in contract.json"),
+    ("src/mcp_server_obp/status.py", "client.get(url)", "OBP-API root and other health checks; the root URL is listed in contract.json"),
+    ("src/mcp_server_obp/status.py", "client.get(jwks_uri)", "JWKS of the identity provider, not OBP-API"),
+    ("src/mcp_server_obp/server.py", "url=url", "call_obp_api: the endpoint the user picks from the index (not listed, floored to v5.1.0)"),
+    ("src/mcp_server_obp/auth.py", "client.get(jwks_uri)", "JWKS of the identity provider, not OBP-API"),
+    ("src/mcp_server_obp/auth.py", ".well-known/oauth-authorization-server", "Keycloak metadata, not OBP-API"),
+    ("src/mcp_server_obp/auth.py", "registration_endpoint", "Keycloak client registration, not OBP-API"),
+    ("src/temp/keycloak.py", ".well-known/oauth-authorization-server", "Keycloak metadata, not OBP-API"),
+    ("src/temp/keycloak.py", "registration_endpoint", "Keycloak client registration, not OBP-API"),
 ]
 
 
@@ -66,7 +94,9 @@ def undocumented_reads(call, fields):
 
 
 def builds_obp_path(text):
-    return "/obp/v" in text or "/obp/{" in text
+    """True for a string with an OBP-API path in it, or a piece of one: a string that ends in `/obp` or `/obp/`
+    is the start of a path put together with `+` or `join`, e.g. base + "/obp/" + version + "/root"."""
+    return "/obp/v" in text or "/obp/{" in text or re.search(r"/obp/?$", text) is not None
 
 
 def docstring_nodes(tree):
@@ -116,6 +146,22 @@ def obp_path_lines():
     return out
 
 
+def http_client_calls(rel, text):
+    """The calls of an HTTP client in Python source: (line number, the source of the call)."""
+    found = []
+    for node in ast.walk(ast.parse(text, filename=rel)):
+        func = getattr(node, "func", None)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(func, ast.Attribute)
+            and func.attr in HTTP_VERBS
+            and isinstance(func.value, ast.Name)
+            and func.value.id in HTTP_CLIENTS
+        ):
+            found.append((node.lineno, ast.get_source_segment(text, node) or ""))
+    return sorted(found)
+
+
 def test_every_call_in_the_contract_is_in_its_source_file():
     """Tests that each listed call still exists: every needle of an entry occurs in the entry's source file."""
     gone = []
@@ -136,6 +182,23 @@ def test_every_obp_api_call_in_the_source_is_in_the_contract():
         if not any(source == file and needle.strip() in span for source, needle in known)
     ]
     assert unlisted == []
+
+
+def test_every_http_call_in_the_source_is_listed():
+    """Tests coverage of the calls themselves: an HTTP client call whose URL is a variable has no OBP-API path
+    in its own lines, so each call must be listed in HTTP_CALLS (an OBP-API call must also have its URL string
+    in contract.json), and each HTTP_CALLS entry must still match a call."""
+    unlisted, used = [], set()
+    for top in SOURCE_DIRS:
+        for path in sorted((ROOT / top).rglob("*.py")):
+            rel = path.relative_to(ROOT).as_posix()
+            for lineno, segment in http_client_calls(rel, path.read_text()):
+                hits = [i for i, (f, frag, _) in enumerate(HTTP_CALLS) if f == rel and frag in segment]
+                used.update(hits)
+                if not hits:
+                    unlisted.append(f"{rel}:{lineno} {segment.splitlines()[0].strip()}")
+    stale = [f"{f} - {frag}" for i, (f, frag, _) in enumerate(HTTP_CALLS) if i not in used]
+    assert unlisted == [] and stale == []
 
 
 def test_not_calls_are_still_in_the_source():
@@ -283,3 +346,19 @@ echo "OBP Version To Call: $OBP_VERSION_TO_CALL"
         ("OBP_VERSION_TO_CALL", "v5.0.0"),
         ("OBP_VERSION_TO_CALL", "v7.0.0"),
     ]
+
+
+def test_the_scans_find_a_path_put_together_from_pieces_and_a_call_with_the_url_in_a_variable():
+    """Tests the coverage scans themselves: a path built as base + "/obp/" + version + "/x", or a string ending in
+    /obp, is found; so is an HTTP client call whose URL is a variable; other strings and calls are not."""
+    source = '''
+def f(base, version, url):
+    a = base + "/obp/" + version + "/banks"
+    b = "https://host/obp"
+    c = "obp-oidc"
+    r = requests.get(url, timeout=3)
+    s = other.get(url)
+    return a, b, c, r, s
+'''
+    assert [n for n, _ in obp_path_strings("example.py", source)] == [3, 4]
+    assert [n for n, _ in http_client_calls("example.py", source)] == [6]

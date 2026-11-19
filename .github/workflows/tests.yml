@@ -1,0 +1,20 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install the dependencies from uv.lock
+        run: uv sync --frozen
+      - name: Run all the tests, including the OBP-API contract and the v5.1.0 version floor
+        run: uv run --frozen pytest -q

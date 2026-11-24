@@ -39,7 +39,7 @@ from mcp_server_obp.lifespan import lifespan
 from mcp_server_obp.auth import get_auth_provider
 from mcp_server_obp.consent_scope import consent_bank_id, my_resources_for
 from mcp_server_obp.forwarded_for import headers_for_obp
-from mcp_server_obp.status import health_endpoint, index_endpoint, ready_endpoint, status_endpoint
+from mcp_server_obp.status import alive_endpoint, health_endpoint, index_endpoint, ready_endpoint, status_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -664,6 +664,7 @@ mcp.custom_route("/", methods=["GET"])(index_endpoint)
 mcp.custom_route("/status", methods=["GET"])(status_endpoint)
 mcp.custom_route("/health", methods=["GET"])(health_endpoint)
 mcp.custom_route("/ready", methods=["GET"])(ready_endpoint)
+mcp.custom_route("/alive", methods=["GET"])(alive_endpoint)
 
 
 # ============================================================================

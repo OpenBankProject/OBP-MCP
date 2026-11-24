@@ -553,6 +553,7 @@ def _render_index_html(request: Request) -> str:
     <ul>
       <li><a href="/status">Status page</a> — configuration, connectivity checks, index freshness (<a href="/status?format=json">JSON</a>)</li>
       <li><a href="/health">Health</a> — liveness probe</li>
+      <li><a href="/alive">Alive</a> — liveness probe, as on OBP-API</li>
       <li><a href="/ready">Ready</a> — readiness probe</li>
     </ul>
   </section>
@@ -568,6 +569,13 @@ def _render_index_html(request: Request) -> str:
 async def index_endpoint(request: Request) -> Response:
     """Public index page: connectivity instructions and links to diagnostics."""
     return HTMLResponse(_render_index_html(request))
+
+
+async def alive_endpoint(request: Request) -> Response:
+    """Liveness probe modelled on OBP-API's /alive: the body is `true` as long as the process serves HTTP.
+    It makes no outbound calls and checks nothing else.
+    """
+    return Response("true", media_type="application/json", headers={"Cache-Control": "no-store"})
 
 
 async def health_endpoint(request: Request) -> Response:
